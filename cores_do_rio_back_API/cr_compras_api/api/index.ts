@@ -15,6 +15,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'GET':
         return res.status(200).json({ data: [] });
       case 'POST':
+        if (!body || Object.keys(body).length === 0) {
+          return res.status(400).json({ error: 'Corpo da requisição é obrigatório' });
+        }
         const novoItem = body;
         return res.status(201).json({
           message: 'Compra criada com sucesso',

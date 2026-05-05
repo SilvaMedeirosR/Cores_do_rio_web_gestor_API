@@ -14,6 +14,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'GET':
         return res.status(200).json({ data: [] });
       case 'POST':
+        if (!body || Object.keys(body).length === 0) {
+          return res.status(400).json({ error: 'Dados financeiros são obrigatórios' });
+        }
         const novoLancamento = body;
         return res.status(201).json({
           message: 'Lançamento financeiro criado com sucesso',

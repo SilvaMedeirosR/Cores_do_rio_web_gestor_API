@@ -1,0 +1,22 @@
+{
+  "name": "cr-dep-pess-api",
+  "version": "1.0.0",
+  "description": "API de Departamento Pessoal - Cores do Rio",
+  "main": "api/index.ts",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["vercel", "serverless", "api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/node": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vercel": "^32.7.1"
+  }
+}

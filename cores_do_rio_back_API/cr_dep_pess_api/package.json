@@ -8,11 +8,15 @@
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["vercel", "serverless", "api"],
+  "keywords": [
+    "vercel",
+    "serverless",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@vercel/node": "^3.0.0"
+    "@vercel/node": "^3.2.29"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

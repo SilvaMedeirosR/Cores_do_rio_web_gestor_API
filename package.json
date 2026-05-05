@@ -1,4 +1,11 @@
 {
+  "name": "cores-do-rio-api-root",
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "npm install --prefix cores_do_rio_front_API && npm install --prefix cores_do_rio_back_API/cr_compras_api && npm install --prefix cores_do_rio_back_API/cr_dep_pess_api && npm install --prefix cores_do_rio_back_API/cr_financeiro_api && npm install --prefix cores_do_rio_back_API/cr_orcamento_api",
+    "build:front": "cd cores_do_rio_front_API && npm run build",
+    "prepare:release": "npm run install:all && npm run build:front"
+  },
   "dependencies": {
     "typescript": "^5.3.3"
   }

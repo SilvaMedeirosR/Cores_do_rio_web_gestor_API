@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 
@@ -114,6 +115,12 @@ export default function OrcamentosPage() {
         </button>
       </div>
 
+      <div className="flex gap-3 mb-2">
+        <Link href="/orcamentos/obras" className="text-sm text-orange-600 hover:text-orange-800 font-medium border border-orange-200 hover:border-orange-400 px-3 py-1.5 rounded-lg transition-colors">
+          Obras Cadastradas
+        </Link>
+      </div>
+
       {/* Formulario de criacao */}
       {showForm && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 mb-8 shadow-sm">
@@ -225,7 +232,7 @@ export default function OrcamentosPage() {
           </div>
         ) : orcamentos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-zinc-400">
-            <span className="text-4xl mb-3">ðŸ“‹</span>
+            <span className="text-4xl mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹</span>
             <p className="font-medium">Nenhum orcamento cadastrado</p>
             <p className="text-sm mt-1">Clique em &quot;+ Novo Orcamento&quot; para comecar</p>
           </div>
@@ -274,7 +281,7 @@ export default function OrcamentosPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 text-sm">
-                    {o.validade ? fmtDate(o.validade) : "â€”"}
+                    {o.validade ? fmtDate(o.validade) : "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                   </td>
                   <td className="px-6 py-4 text-zinc-400 text-sm">
                     {new Date(o.created_at).toLocaleDateString("pt-BR")}

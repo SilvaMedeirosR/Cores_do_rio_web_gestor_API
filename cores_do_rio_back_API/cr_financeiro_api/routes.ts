@@ -1,6 +1,7 @@
-﻿import { VercelRequest, VercelResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import { supabase } from './lib/supabase';
 
-export type RouteHandler = (req: VercelRequest, res: VercelResponse) => VercelResponse | void;
+export type RouteHandler = (req: VercelRequest, res: VercelResponse) => Promise<VercelResponse | void> | VercelResponse | void;
 
 export interface Route {
   method: string;
@@ -14,19 +15,20 @@ export interface Route {
 // POST /  -> Cria um novo lancamento financeiro
 // ============================================================
 
-function listarLancamentos(_req: VercelRequest, res: VercelResponse) {
-  return res.status(200).json({ data: [] });
+async function listarLancamentos(_req: VercelRequest, res: VercelResponse) {
+  const { data, error } = await supabase.from('lancamentos').select('*').order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  return res.status(200).json({ data });
 }
 
-function criarLancamento(req: VercelRequest, res: VercelResponse) {
+async function criarLancamento(req: VercelRequest, res: VercelResponse) {
   const { body } = req;
   if (!body || Object.keys(body).length === 0) {
     return res.status(400).json({ error: 'Dados financeiros sao obrigatorios' });
   }
-  return res.status(201).json({
-    message: 'Lancamento financeiro criado com sucesso',
-    data: { id: Date.now(), ...body }
-  });
+  const { data, error } = await supabase.from('lancamentos').insert(body).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  return res.status(201).json({ message: 'Lancamento financeiro criado com sucesso', data });
 }
 
 // ============================================================
@@ -35,11 +37,7 @@ function criarLancamento(req: VercelRequest, res: VercelResponse) {
 // ============================================================
 
 function healthCheck(_req: VercelRequest, res: VercelResponse) {
-  return res.status(200).json({
-    status: 'ok',
-    api: 'cr-financeiro-api',
-    timestamp: new Date().toISOString()
-  });
+  return res.status(200).json({ status: 'ok', api: 'cr-financeiro-api', timestamp: new Date().toISOString() });
 }
 
 export const routes: Route[] = [

@@ -1,4 +1,4 @@
-﻿import { VercelRequest, VercelResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { routes } from '../routes';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const route = routes.find(r => r.method === method && r.path === path);
     if (!route) return res.status(405).json({ error: 'Metodo ou rota nao permitido' });
 
-    return route.handler(req, res);
+    return await route.handler(req, res);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor' });

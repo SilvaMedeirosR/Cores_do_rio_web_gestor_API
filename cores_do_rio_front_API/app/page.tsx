@@ -1,114 +1,105 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
-const API_COMPRAS = process.env.NEXT_PUBLIC_API_COMPRAS;
-const API_DEP_PESS = process.env.NEXT_PUBLIC_API_DEP_PESS;
-const API_FINANCEIRO = process.env.NEXT_PUBLIC_API_FINANCEIRO;
-const API_ORCAMENTO = process.env.NEXT_PUBLIC_API_ORCAMENTO;
+const MODULES = [
+  {
+    label: "Orcamentos",
+    href: "/orcamentos",
+    api: process.env.NEXT_PUBLIC_API_ORCAMENTO,
+    desc: "Planejamento e gestao de orcamentos",
+    icon: "ðŸ“‹",
+  },
+  {
+    label: "Compras",
+    href: "/compras",
+    api: process.env.NEXT_PUBLIC_API_COMPRAS,
+    desc: "Pedidos e ordens de compra",
+    icon: "ðŸ›’",
+  },
+  {
+    label: "Depto. Pessoal",
+    href: "/departamento-pessoal",
+    api: process.env.NEXT_PUBLIC_API_DEP_PESS,
+    desc: "Gestao de funcionarios e registros de DP",
+    icon: "ðŸ‘¥",
+  },
+  {
+    label: "Financeiro",
+    href: "/financeiro",
+    api: process.env.NEXT_PUBLIC_API_FINANCEIRO,
+    desc: "Lancamentos e transacoes financeiras",
+    icon: "ðŸ’°",
+  },
+];
+
+type StatusMap = Record<string, "checking" | "online" | "offline">;
 
 export default function Home() {
-  const [status, setStatus] = useState<{
-    compras: string;
-    depPess: string;
-    financeiro: string;
-    orcamento: string;
-  }>({
-    compras: "Verificando...",
-    depPess: "Verificando...",
-    financeiro: "Verificando...",
-    orcamento: "Verificando...",
-  });
+  const [statuses, setStatuses] = useState<StatusMap>(
+    Object.fromEntries(MODULES.map((m) => [m.label, "checking"]))
+  );
 
   useEffect(() => {
-    const checkApiStatus = async () => {
-      const checkEndpoint = async (url: string | undefined) => {
-        if (!url) return "URL não configurada";
-        try {
-          const response = await fetch(url);
-          if (response.ok) return "✅ Online";
-          return `❌ Erro ${response.status}`;
-        } catch (error) {
-          return "❌ Offline";
-        }
-      };
-
-      const [compras, depPess, financeiro, orcamento] = await Promise.all([
-        checkEndpoint(API_COMPRAS),
-        checkEndpoint(API_DEP_PESS),
-        checkEndpoint(API_FINANCEIRO),
-        checkEndpoint(API_ORCAMENTO),
-      ]);
-
-      setStatus({ compras, depPess, financeiro, orcamento });
-    };
-
-    checkApiStatus();
+    MODULES.forEach(async ({ label, api }) => {
+      if (!api) {
+        setStatuses((s) => ({ ...s, [label]: "offline" }));
+        return;
+      }
+      try {
+        const r = await fetch(`${api}/health`);
+        setStatuses((s) => ({ ...s, [label]: r.ok ? "online" : "offline" }));
+      } catch {
+        setStatuses((s) => ({ ...s, [label]: "offline" }));
+      }
+    });
   }, []);
 
+  const onlineCount = Object.values(statuses).filter((s) => s === "online").length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black min-h-screen">
-      <main className="flex flex-1 w-full max-w-4xl flex-col items-center py-16 px-8 bg-white dark:bg-black">
-        <h1 className="text-4xl font-bold mb-8 text-black dark:text-zinc-50">
-          Cores do Rio - Sistema Web
-        </h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-        <div className="w-full max-w-2xl bg-zinc-100 dark:bg-zinc-900 rounded-lg p-6 mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-black dark:text-zinc-50">
-            Status das APIs
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-white dark:bg-zinc-800 rounded-lg">
-              <h3 className="font-medium text-black dark:text-zinc-50">
-                API de Compras
-              </h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {API_COMPRAS}
-              </p>
-              <p className="mt-2 text-sm font-medium">{status.compras}</p>
-            </div>
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-zinc-900">Dashboard</h1>
+        <p className="text-zinc-500 mt-1">
+          {onlineCount === MODULES.length
+            ? "Todos os modulos online"
+            : `${onlineCount} de ${MODULES.length} modulos online`}
+        </p>
+      </div>
 
-            <div className="p-4 bg-white dark:bg-zinc-800 rounded-lg">
-              <h3 className="font-medium text-black dark:text-zinc-50">
-                API Dep. Pessoal
-              </h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {API_DEP_PESS}
-              </p>
-              <p className="mt-2 text-sm font-medium">{status.depPess}</p>
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {MODULES.map(({ label, href, desc, icon }) => {
+          const status = statuses[label];
+          return (
+            <Link
+              key={label}
+              href={href}
+              className="bg-white rounded-xl border border-zinc-200 p-6 hover:border-orange-400 hover:shadow-md transition-all group cursor-pointer"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <span className="text-3xl">{icon}</span>
+                <span
+                  className={`w-2.5 h-2.5 rounded-full mt-1 ${
+                    status === "online"
+                      ? "bg-green-500"
+                      : status === "offline"
+                      ? "bg-red-500"
+                      : "bg-zinc-300 animate-pulse"
+                  }`}
+                />
+              </div>
+              <h2 className="font-semibold text-zinc-900 group-hover:text-orange-600 transition-colors mb-1">
+                {label}
+              </h2>
+              <p className="text-sm text-zinc-500">{desc}</p>
+            </Link>
+          );
+        })}
+      </div>
 
-            <div className="p-4 bg-white dark:bg-zinc-800 rounded-lg">
-              <h3 className="font-medium text-black dark:text-zinc-50">
-                API Financeira
-              </h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {API_FINANCEIRO}
-              </p>
-              <p className="mt-2 text-sm font-medium">{status.financeiro}</p>
-            </div>
-
-            <div className="p-4 bg-white dark:bg-zinc-800 rounded-lg">
-              <h3 className="font-medium text-black dark:text-zinc-50">
-                API de Orçamento
-              </h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {API_ORCAMENTO}
-              </p>
-              <p className="mt-2 text-sm font-medium">{status.orcamento}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="text-center text-zinc-600 dark:text-zinc-400">
-          <p className="mb-2">
-            Todas as APIs estão conectadas e operacionais.
-          </p>
-          <p className="text-sm">
-            O front-end está consumindo as APIs do back-end na Vercel.
-          </p>
-        </div>
-      </main>
     </div>
   );
 }

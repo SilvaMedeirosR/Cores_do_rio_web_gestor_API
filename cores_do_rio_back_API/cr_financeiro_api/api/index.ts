@@ -1,31 +1,22 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+﻿import { VercelRequest, VercelResponse } from '@vercel/node';
+import { routes } from '../routes';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const { method, body } = req;
-
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    if (method === 'OPTIONS') return res.status(200).end();
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    switch (method) {
-      case 'GET':
-        return res.status(200).json({ data: [] });
-      case 'POST':
-        if (!body || Object.keys(body).length === 0) {
-          return res.status(400).json({ error: 'Dados financeiros são obrigatórios' });
-        }
-        const novoLancamento = body;
-        return res.status(201).json({
-          message: 'Lançamento financeiro criado com sucesso',
-          data: { id: Date.now(), ...novoLancamento }
-        });
+    const url = new URL(req.url || '/', 'http://localhost');
+    const path = url.pathname;
+    const method = req.method || 'GET';
 
-      default:
-        return res.status(405).json({ error: 'Método não permitido' });
-    }
+    const route = routes.find(r => r.method === method && r.path === path);
+    if (!route) return res.status(405).json({ error: 'Metodo ou rota nao permitido' });
+
+    return route.handler(req, res);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor' });

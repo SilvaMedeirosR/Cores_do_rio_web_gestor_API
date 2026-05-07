@@ -10,6 +10,7 @@ const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banh
 const fmt  = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const fmtN = (v: unknown) => Number(v).toFixed(2).replace(".",",");
 
+type ParadeKey = "parede1_m2"|"parede2_m2"|"parede3_m2"|"parede4_m2";
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
 interface Comodo {
   id:string; tipo:string; nome:string|null;
@@ -70,10 +71,10 @@ export default function ComodoDetailPage() {
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
           <h2 className="text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Medicoes</h2>
           <div className="space-y-3">
-            {[1,2,3,4].map(n => (
+            {([1,2,3,4] as const).map(n => (
               <div key={n} className="flex items-center justify-between">
                 <span className="text-sm text-zinc-500">Parede {n}</span>
-                <span className="text-sm font-semibold text-zinc-800">{fmtN((comodo as Record<string,unknown>)[`parede${n}_m2`])} m²</span>
+                <span className="text-sm font-semibold text-zinc-800">{fmtN(comodo[`parede${n}_m2` as ParadeKey])} m²</span>
               </div>
             ))}
             <div className="flex items-center justify-between border-t border-zinc-100 pt-3">

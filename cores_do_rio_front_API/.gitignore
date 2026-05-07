@@ -9,3 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 .turbo
+cores_do_rio_back_API/
+cores_do_rio_front_API/
+prisma/
+supabase/

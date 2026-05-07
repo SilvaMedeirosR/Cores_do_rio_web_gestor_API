@@ -10,6 +10,8 @@ const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banh
 const fmt  = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const fmtN = (v: unknown) => Number(v).toFixed(2).replace(".",",");
 
+type ParadeKey = "parede1_m2"|"parede2_m2"|"parede3_m2"|"parede4_m2";
+type EtapaKey  = "massa_parede"|"massa_teto"|"lixacao"|"pintura"|"acabamento";
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
 interface Comodo { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; orcamento:OrcComodo; }
 interface Pavimento { id:string; nome:string; numero:number; orcamento_total:number; comodos:Comodo[]; obras: { id:string; nome:string }; }
@@ -72,10 +74,10 @@ export default function PavimentoDetailPage() {
               <div>
                 <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Medicoes</h3>
                 <div className="space-y-2">
-                  {[1,2,3,4].map(n => (
+                  {([1,2,3,4] as const).map(n => (
                     <div key={n} className="flex justify-between text-sm">
                       <span className="text-zinc-500">Parede {n}</span>
-                      <span className="font-medium text-zinc-800">{fmtN((c as Record<string,unknown>)[`parede${n}_m2`])} m²</span>
+                      <span className="font-medium text-zinc-800">{fmtN(c[`parede${n}_m2` as ParadeKey])} m²</span>
                     </div>
                   ))}
                   <div className="flex justify-between text-sm border-t border-zinc-100 pt-2">
@@ -94,7 +96,7 @@ export default function PavimentoDetailPage() {
                   {ETAPAS.map(e => (
                     <div key={e} className="flex justify-between text-sm">
                       <span className="text-zinc-500">{ETAPA_LABELS[e]}</span>
-                      <span className="font-medium text-zinc-800">{fmt((c.orcamento as Record<string,number>)[e])}</span>
+                      <span className="font-medium text-zinc-800">{fmt(c.orcamento[e as EtapaKey])}</span>
                     </div>
                   ))}
                   <div className="flex justify-between text-sm border-t border-zinc-100 pt-2">

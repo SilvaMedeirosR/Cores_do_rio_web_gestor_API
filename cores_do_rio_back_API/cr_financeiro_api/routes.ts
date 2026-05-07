@@ -12,20 +12,24 @@ export interface Route {
 const ETAPAS = ['massa_parede', 'massa_teto', 'lixacao', 'pintura', 'acabamento'] as const;
 type Etapa = typeof ETAPAS[number];
 
-interface ComodoMedidas {
+// Campos mínimos para calcular orçamento
+interface ComodoCalculo {
   id: string;
   parede1_m2: unknown;
   parede2_m2: unknown;
   parede3_m2: unknown;
   parede4_m2: unknown;
   teto_m2: unknown;
+}
+
+// Campos completos usados no detalhe da obra
+interface ComodoMedidas extends ComodoCalculo {
   tipo: string;
   nome: string | null;
   etapa_atual: string | null;
-  pavimento_id: string;
 }
 
-function calcOrcamentoComodo(c: ComodoMedidas, precoMap: Record<string, number>): Record<Etapa, number> & { total: number } {
+function calcOrcamentoComodo(c: ComodoCalculo, precoMap: Record<string, number>): Record<Etapa, number> & { total: number } {
   const totalParedes =
     Number(c.parede1_m2) + Number(c.parede2_m2) +
     Number(c.parede3_m2) + Number(c.parede4_m2);
@@ -91,28 +95,32 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
   if (error) return res.status(500).json({ error: error.message });
   if (!obras || obras.length === 0) return res.status(200).json({ data: [] });
 
-  type ObraRow = typeof obras[0];
-  const allComodoIds = (obras as ObraRow[]).flatMap((o: ObraRow) =>
-    (o.pavimentos as Array<{ comodos: Array<{ id: string }> }>).flatMap(p => p.comodos.map(c => c.id))
-  );
+  type PavRow = { id: string; comodos: ComodoCalculo[] };
+  type ObraRow = {
+    id: string; nome: string; local: string;
+    obra_precos: Array<{ etapa: string; preco_m2: unknown }>;
+    pavimentos: PavRow[];
+  };
+
+  const rows = obras as unknown as ObraRow[];
+
+  const allComodoIds = rows.flatMap(o => o.pavimentos.flatMap(p => p.comodos.map(c => c.id)));
 
   const { data: progresso } = allComodoIds.length > 0
     ? await supabase.from('etapa_progresso').select('comodo_id, valor_pago').in('comodo_id', allComodoIds)
     : { data: [] };
 
   const pagoMap: Record<string, number> = {};
-  for (const p of (progresso ?? [])) {
+  for (const p of (progresso ?? []) as Array<{ comodo_id: string; valor_pago: unknown }>) {
     pagoMap[p.comodo_id] = (pagoMap[p.comodo_id] ?? 0) + Number(p.valor_pago);
   }
 
-  const result = (obras as ObraRow[]).map((o: ObraRow) => {
-    const precoMap = Object.fromEntries(
-      (o.obra_precos as Array<{ etapa: string; preco_m2: unknown }>).map(p => [p.etapa, Number(p.preco_m2)])
-    );
+  const result = rows.map(o => {
+    const precoMap = Object.fromEntries(o.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
     let orcamento_total = 0;
     let valor_pago = 0;
     let num_comodos = 0;
-    for (const pav of (o.pavimentos as Array<{ comodos: ComodoMedidas[] }>)) {
+    for (const pav of o.pavimentos) {
       for (const c of pav.comodos) {
         orcamento_total += calcOrcamentoComodo(c, precoMap).total;
         valor_pago      += pagoMap[c.id] ?? 0;
@@ -125,7 +133,7 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
       local: o.local,
       orcamento_total,
       valor_pago,
-      num_pavimentos: (o.pavimentos as unknown[]).length,
+      num_pavimentos: o.pavimentos.length,
       num_comodos,
     };
   });
@@ -152,19 +160,24 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
 
   if (error) return res.status(404).json({ error: 'Obra nao encontrada' });
 
-  type ObraDetail = typeof obra;
-  const precoMap = Object.fromEntries(
-    ((obra as ObraDetail).obra_precos as Array<{ etapa: string; preco_m2: unknown }>).map(p => [p.etapa, Number(p.preco_m2)])
-  );
+  type PavDetail = { id: string; nome: string; numero: number; comodos: ComodoMedidas[] };
+  type ObraDetail = {
+    id: string; nome: string; local: string;
+    obra_precos: Array<{ etapa: string; preco_m2: unknown }>;
+    pavimentos: PavDetail[];
+  };
 
-  const allComodoIds = ((obra as ObraDetail).pavimentos as Array<{ comodos: ComodoMedidas[] }>)
-    .flatMap(p => p.comodos.map(c => c.id));
+  const o = obra as unknown as ObraDetail;
+  const precoMap = Object.fromEntries(o.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
+  const allComodoIds = o.pavimentos.flatMap(p => p.comodos.map(c => c.id));
 
   // Auto-create missing etapa_progresso records
   const { data: existingProg } = await supabase
     .from('etapa_progresso').select('comodo_id, etapa').in('comodo_id', allComodoIds);
 
-  const existingSet = new Set((existingProg ?? []).map((r: { comodo_id: string; etapa: string }) => `${r.comodo_id}:${r.etapa}`));
+  const existingSet = new Set(
+    (existingProg ?? []).map((r: { comodo_id: string; etapa: string }) => `${r.comodo_id}:${r.etapa}`)
+  );
   const toInsert: Array<{ comodo_id: string; etapa: string; valor_pago: number; concluida: boolean }> = [];
   for (const comodoId of allComodoIds) {
     for (const etapa of ETAPAS) {
@@ -178,9 +191,9 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
   const { data: progresso } = await supabase
     .from('etapa_progresso').select('comodo_id, etapa, valor_pago, concluida').in('comodo_id', allComodoIds);
 
-  type ProgRecord = { comodo_id: string; etapa: string; valor_pago: number; concluida: boolean };
+  type ProgRecord = { comodo_id: string; etapa: string; valor_pago: unknown; concluida: boolean };
   const progMap: Record<string, Record<string, ProgRecord>> = {};
-  for (const p of ((progresso ?? []) as ProgRecord[])) {
+  for (const p of (progresso ?? []) as ProgRecord[]) {
     if (!progMap[p.comodo_id]) progMap[p.comodo_id] = {};
     progMap[p.comodo_id][p.etapa] = p;
   }
@@ -188,9 +201,7 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
   let obra_orcamento = 0;
   let obra_pago = 0;
 
-  const pavimentos = ((obra as ObraDetail).pavimentos as Array<{
-    id: string; nome: string; numero: number; comodos: ComodoMedidas[];
-  }>)
+  const pavimentos = o.pavimentos
     .sort((a, b) => a.numero - b.numero)
     .map(pav => {
       let pav_orcamento = 0;
@@ -200,7 +211,7 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
         const orcEtapas = calcOrcamentoComodo(c, precoMap);
         const etapas = ETAPAS.map(e => {
           const orcEtapa = orcEtapas[e];
-          const prog = progMap[c.id]?.[e];
+          const prog     = progMap[c.id]?.[e];
           const valor_pago = prog ? Number(prog.valor_pago) : 0;
           const concluida  = prog?.concluida || valor_pago >= orcEtapa;
           return { etapa: e, orcamento: orcEtapa, valor_pago, concluida };
@@ -225,18 +236,11 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
     });
 
   return res.status(200).json({
-    data: {
-      id: (obra as ObraDetail).id,
-      nome: (obra as ObraDetail).nome,
-      local: (obra as ObraDetail).local,
-      orcamento_total: obra_orcamento,
-      valor_pago: obra_pago,
-      pavimentos,
-    },
+    data: { id: o.id, nome: o.nome, local: o.local, orcamento_total: obra_orcamento, valor_pago: obra_pago, pavimentos },
   });
 }
 
-// ── Progresso (endpoints antigos mantidos para compatibilidade) ───────────────
+// ── Progresso (endpoints mantidos para compatibilidade) ───────────────────────
 
 async function getProgressoComodo(_req: VercelRequest, res: VercelResponse, params?: Record<string, string>) {
   const comodoId = params?.comodoId;

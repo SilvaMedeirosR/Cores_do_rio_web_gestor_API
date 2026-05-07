@@ -9,12 +9,6 @@ export interface Route {
   handler: RouteHandler;
 }
 
-// ============================================================
-// Compras - Gerenciamento de pedidos e ordens de compra
-// GET  /  -> Lista todas as compras registradas
-// POST /  -> Cria uma nova ordem de compra
-// ============================================================
-
 async function listarCompras(_req: VercelRequest, res: VercelResponse) {
   const { data, error } = await supabase.from('compras').select('*').order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
@@ -23,18 +17,30 @@ async function listarCompras(_req: VercelRequest, res: VercelResponse) {
 
 async function criarCompra(req: VercelRequest, res: VercelResponse) {
   const { body } = req;
-  if (!body || Object.keys(body).length === 0) {
-    return res.status(400).json({ error: 'Corpo da requisicao e obrigatorio' });
+  if (!body || typeof body !== 'object') {
+    return res.status(400).json({ error: 'Corpo da requisicao invalido' });
   }
-  const { data, error } = await supabase.from('compras').insert(body).select().single();
+
+  const { item, quantidade, valor, status } = body as Record<string, unknown>;
+
+  if (!item || typeof item !== 'string' || item.trim() === '') {
+    return res.status(400).json({ error: 'Campo "item" e obrigatorio' });
+  }
+  if (valor === undefined || valor === null || isNaN(Number(valor))) {
+    return res.status(400).json({ error: 'Campo "valor" e obrigatorio e deve ser numerico' });
+  }
+
+  const payload: Record<string, unknown> = {
+    item: item.trim(),
+    valor: Number(valor),
+    quantidade: quantidade !== undefined ? Math.max(1, parseInt(String(quantidade)) || 1) : 1,
+  };
+  if (status !== undefined) payload.status = String(status);
+
+  const { data, error } = await supabase.from('compras').insert(payload).select().single();
   if (error) return res.status(500).json({ error: error.message });
   return res.status(201).json({ message: 'Compra criada com sucesso', data });
 }
-
-// ============================================================
-// Health Check - Monitoramento e disponibilidade da API de Compras
-// GET /health -> Retorna o status atual da API
-// ============================================================
 
 function healthCheck(_req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ status: 'ok', api: 'cr-compras-api', timestamp: new Date().toISOString() });

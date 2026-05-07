@@ -9,12 +9,6 @@ export interface Route {
   handler: RouteHandler;
 }
 
-// ============================================================
-// Departamento Pessoal - Gestao de funcionarios e registros de DP
-// GET  /  -> Lista todos os registros de funcionarios
-// POST /  -> Cria um novo registro de funcionario
-// ============================================================
-
 async function listarFuncionarios(_req: VercelRequest, res: VercelResponse) {
   const { data, error } = await supabase.from('funcionarios').select('*').order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
@@ -23,18 +17,35 @@ async function listarFuncionarios(_req: VercelRequest, res: VercelResponse) {
 
 async function criarFuncionario(req: VercelRequest, res: VercelResponse) {
   const { body } = req;
-  if (!body || Object.keys(body).length === 0) {
-    return res.status(400).json({ error: 'Dados do funcionario sao obrigatorios' });
+  if (!body || typeof body !== 'object') {
+    return res.status(400).json({ error: 'Corpo da requisicao invalido' });
   }
-  const { data, error } = await supabase.from('funcionarios').insert(body).select().single();
-  if (error) return res.status(500).json({ error: error.message });
+
+  const { nome, cpf, cargo, salario, data_admissao, status } = body as Record<string, unknown>;
+
+  if (!nome || typeof nome !== 'string' || nome.trim() === '') {
+    return res.status(400).json({ error: 'Campo "nome" e obrigatorio' });
+  }
+  if (!cargo || typeof cargo !== 'string' || cargo.trim() === '') {
+    return res.status(400).json({ error: 'Campo "cargo" e obrigatorio' });
+  }
+
+  const payload: Record<string, unknown> = {
+    nome: nome.trim(),
+    cargo: cargo.trim(),
+  };
+  if (cpf !== undefined && cpf !== null && String(cpf).trim() !== '') payload.cpf = String(cpf).trim();
+  if (salario !== undefined && salario !== null && !isNaN(Number(salario))) payload.salario = Number(salario);
+  if (data_admissao) payload.data_admissao = String(data_admissao);
+  if (status !== undefined) payload.status = String(status);
+
+  const { data, error } = await supabase.from('funcionarios').insert(payload).select().single();
+  if (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'CPF ja cadastrado' });
+    return res.status(500).json({ error: error.message });
+  }
   return res.status(201).json({ message: 'Registro de DP criado com sucesso', data });
 }
-
-// ============================================================
-// Health Check - Monitoramento e disponibilidade da API de DP
-// GET /health -> Retorna o status atual da API
-// ============================================================
 
 function healthCheck(_req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ status: 'ok', api: 'cr-dep-pess-api', timestamp: new Date().toISOString() });

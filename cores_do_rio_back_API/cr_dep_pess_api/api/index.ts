@@ -13,8 +13,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const path = url.pathname;
     const method = req.method || 'GET';
 
-    const route = routes.find(r => r.method === method && r.path === path);
-    if (!route) return res.status(405).json({ error: 'Metodo ou rota nao permitido' });
+    const pathRoutes = routes.filter(r => r.path === path);
+    if (pathRoutes.length === 0) return res.status(404).json({ error: 'Rota nao encontrada' });
+
+    const route = pathRoutes.find(r => r.method === method);
+    if (!route) return res.status(405).json({ error: 'Metodo nao permitido' });
 
     return await route.handler(req, res);
   } catch (error) {

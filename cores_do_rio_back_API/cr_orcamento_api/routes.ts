@@ -198,6 +198,162 @@ async function getComodo(_req: VercelRequest, res: VercelResponse, params: Recor
   return res.status(200).json({ data: { ...c, orcamento: orc } });
 }
 
+// ── Obras (editar/excluir) ────────────────────────────────────────────────────
+
+async function atualizarObra(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const { nome, local, precos } = req.body ?? {};
+  const obra = await prisma.obras.findUnique({ where: { id: params.id } });
+  if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.obras.update({
+      where: { id: params.id },
+      data: {
+        ...(nome  && { nome:  String(nome)  }),
+        ...(local && { local: String(local) }),
+      },
+    });
+    if (Array.isArray(precos)) {
+      await tx.obra_precos.deleteMany({ where: { obra_id: params.id } });
+      if (precos.length > 0) {
+        await tx.obra_precos.createMany({
+          data: precos.map((p: { etapa: string; preco_m2: number }) => ({
+            obra_id: params.id, etapa: p.etapa as never, preco_m2: p.preco_m2,
+          })),
+        });
+      }
+    }
+  });
+
+  const data = await prisma.obras.findUnique({
+    where: { id: params.id },
+    include: { obra_precos: true, pavimentos: { orderBy: { numero: 'asc' }, include: { comodos: true } } },
+  });
+  return res.status(200).json({ message: 'Obra atualizada com sucesso', data });
+}
+
+async function excluirObra(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const obra = await prisma.obras.findUnique({
+    where: { id: params.id },
+    include: { pavimentos: { include: { comodos: { select: { id: true } } } } },
+  });
+  if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  const comodoIds = obra.pavimentos.flatMap(p => p.comodos.map(c => c.id));
+  await prisma.$transaction(async (tx) => {
+    if (comodoIds.length > 0) {
+      await tx.etapa_progresso.deleteMany({ where: { comodo_id: { in: comodoIds } } });
+    }
+    await tx.obras.delete({ where: { id: params.id } });
+  });
+  return res.status(200).json({ message: 'Obra excluida com sucesso' });
+}
+
+// ── Pavimentos (criar/editar/excluir) ─────────────────────────────────────────
+
+async function adicionarPavimento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const { nome, numero, comodos } = req.body ?? {};
+  if (!nome || numero === undefined) return res.status(400).json({ error: 'nome e numero sao obrigatorios' });
+  const obra = await prisma.obras.findUnique({ where: { id: params.id } });
+  if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  const data = await prisma.$transaction(async (tx) => {
+    const pav = await tx.pavimentos.create({
+      data: { obra_id: params.id, nome: String(nome), numero: Number(numero) },
+    });
+    if (Array.isArray(comodos) && comodos.length > 0) {
+      await tx.comodos.createMany({
+        data: comodos.map((c: { tipo: string; nome?: string; parede1_m2?: number; parede2_m2?: number; parede3_m2?: number; parede4_m2?: number; teto_m2?: number }) => ({
+          pavimento_id: pav.id, tipo: c.tipo as never, nome: c.nome ?? null,
+          parede1_m2: c.parede1_m2 ?? 0, parede2_m2: c.parede2_m2 ?? 0,
+          parede3_m2: c.parede3_m2 ?? 0, parede4_m2: c.parede4_m2 ?? 0,
+          teto_m2: c.teto_m2 ?? 0,
+        })),
+      });
+    }
+    return tx.pavimentos.findUnique({ where: { id: pav.id }, include: { comodos: true } });
+  });
+  return res.status(201).json({ message: 'Pavimento adicionado com sucesso', data });
+}
+
+async function atualizarPavimento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const { nome, numero } = req.body ?? {};
+  const pav = await prisma.pavimentos.findUnique({ where: { id: params.id } });
+  if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
+  const data = await prisma.pavimentos.update({
+    where: { id: params.id },
+    data: {
+      ...(nome && { nome: String(nome) }),
+      ...(numero !== undefined && { numero: Number(numero) }),
+    },
+  });
+  return res.status(200).json({ message: 'Pavimento atualizado com sucesso', data });
+}
+
+async function excluirPavimento(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const pav = await prisma.pavimentos.findUnique({
+    where: { id: params.id },
+    include: { comodos: { select: { id: true } } },
+  });
+  if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
+  const comodoIds = pav.comodos.map(c => c.id);
+  await prisma.$transaction(async (tx) => {
+    if (comodoIds.length > 0) {
+      await tx.etapa_progresso.deleteMany({ where: { comodo_id: { in: comodoIds } } });
+    }
+    await tx.pavimentos.delete({ where: { id: params.id } });
+  });
+  return res.status(200).json({ message: 'Pavimento excluido com sucesso' });
+}
+
+// ── Comodos (criar/editar/excluir) ────────────────────────────────────────────
+
+async function adicionarComodo(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const b = req.body ?? {};
+  if (!b.tipo) return res.status(400).json({ error: 'tipo e obrigatorio' });
+  const pav = await prisma.pavimentos.findUnique({ where: { id: params.id } });
+  if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
+  const data = await prisma.comodos.create({
+    data: {
+      pavimento_id: params.id, tipo: b.tipo as never, nome: b.nome ?? null,
+      parede1_m2: b.parede1_m2 ?? 0, parede2_m2: b.parede2_m2 ?? 0,
+      parede3_m2: b.parede3_m2 ?? 0, parede4_m2: b.parede4_m2 ?? 0,
+      teto_m2:    b.teto_m2    ?? 0,
+    },
+  });
+  return res.status(201).json({ message: 'Comodo adicionado com sucesso', data });
+}
+
+async function atualizarComodo(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const b = req.body ?? {};
+  const comodo = await prisma.comodos.findUnique({ where: { id: params.id } });
+  if (!comodo) return res.status(404).json({ error: 'Comodo nao encontrado' });
+  const data = await prisma.comodos.update({
+    where: { id: params.id },
+    data: {
+      ...(b.tipo        && { tipo:        b.tipo as never        }),
+      ...('nome' in b   && { nome:        b.nome || null         }),
+      ...(b.parede1_m2 !== undefined && { parede1_m2: Number(b.parede1_m2) }),
+      ...(b.parede2_m2 !== undefined && { parede2_m2: Number(b.parede2_m2) }),
+      ...(b.parede3_m2 !== undefined && { parede3_m2: Number(b.parede3_m2) }),
+      ...(b.parede4_m2 !== undefined && { parede4_m2: Number(b.parede4_m2) }),
+      ...(b.teto_m2    !== undefined && { teto_m2:    Number(b.teto_m2)    }),
+      ...(b.etapa_atual && { etapa_atual: b.etapa_atual as never }),
+    },
+  });
+  return res.status(200).json({ message: 'Comodo atualizado com sucesso', data });
+}
+
+async function excluirComodo(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const comodo = await prisma.comodos.findUnique({ where: { id: params.id } });
+  if (!comodo) return res.status(404).json({ error: 'Comodo nao encontrado' });
+  await prisma.$transaction(async (tx) => {
+    await tx.etapa_progresso.deleteMany({ where: { comodo_id: params.id } });
+    await tx.comodos.delete({ where: { id: params.id } });
+  });
+  return res.status(200).json({ message: 'Comodo excluido com sucesso' });
+}
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 function healthCheck(_req: VercelRequest, res: VercelResponse) {
@@ -205,12 +361,20 @@ function healthCheck(_req: VercelRequest, res: VercelResponse) {
 }
 
 export const routes: Route[] = [
-  { method: 'GET',  path: '/',              handler: listarOrcamentos },
-  { method: 'POST', path: '/',              handler: criarOrcamento   },
-  { method: 'GET',  path: '/obras',         handler: listarObras      },
-  { method: 'POST', path: '/obras',         handler: criarObra        },
-  { method: 'GET',  path: '/obras/:id',     handler: getObra          },
-  { method: 'GET',  path: '/pavimentos/:id',handler: getPavimento     },
-  { method: 'GET',  path: '/comodos/:id',   handler: getComodo        },
-  { method: 'GET',  path: '/health',        handler: healthCheck      },
+  { method: 'GET',    path: '/',                       handler: listarOrcamentos   },
+  { method: 'POST',   path: '/',                       handler: criarOrcamento     },
+  { method: 'GET',    path: '/obras',                  handler: listarObras        },
+  { method: 'POST',   path: '/obras',                  handler: criarObra          },
+  { method: 'GET',    path: '/obras/:id',              handler: getObra            },
+  { method: 'PUT',    path: '/obras/:id',              handler: atualizarObra      },
+  { method: 'DELETE', path: '/obras/:id',              handler: excluirObra        },
+  { method: 'POST',   path: '/obras/:id/pavimentos',   handler: adicionarPavimento },
+  { method: 'GET',    path: '/pavimentos/:id',         handler: getPavimento       },
+  { method: 'PUT',    path: '/pavimentos/:id',         handler: atualizarPavimento },
+  { method: 'DELETE', path: '/pavimentos/:id',         handler: excluirPavimento   },
+  { method: 'POST',   path: '/pavimentos/:id/comodos', handler: adicionarComodo    },
+  { method: 'GET',    path: '/comodos/:id',            handler: getComodo          },
+  { method: 'PUT',    path: '/comodos/:id',            handler: atualizarComodo    },
+  { method: 'DELETE', path: '/comodos/:id',            handler: excluirComodo      },
+  { method: 'GET',    path: '/health',                 handler: healthCheck        },
 ];

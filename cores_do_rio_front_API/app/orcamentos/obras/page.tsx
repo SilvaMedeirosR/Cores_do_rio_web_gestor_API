@@ -67,12 +67,14 @@ function calcOrcComodo(c: ComodoForm, precoMap: Record<string, number>) {
 }
 
 export default function ObrasPage() {
-  const [obras, setObras]       = useState<ObraLista[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSub]    = useState(false);
-  const [form, setForm]         = useState<ObraForm>(emptyForm());
-  const [erro, setErro]         = useState<string | null>(null);
+  const [obras, setObras]             = useState<ObraLista[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [showForm, setShowForm]       = useState(false);
+  const [submitting, setSub]          = useState(false);
+  const [form, setForm]               = useState<ObraForm>(emptyForm());
+  const [erro, setErro]               = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting]       = useState(false);
 
   const precoMap = Object.fromEntries(form.precos.map(p => [p.etapa, n(p.preco_m2)]));
 
@@ -118,6 +120,17 @@ export default function ObrasPage() {
       if (!r.ok) { const j = await r.json(); setErro(j.error ?? "Erro ao salvar"); return; }
       setForm(emptyForm()); setShowForm(false); await fetchObras();
     } catch { setErro("Erro de conexao com a API"); } finally { setSub(false); }
+  };
+
+  const handleDelete = async (obraId: string) => {
+    setDeleting(true);
+    try {
+      const r = await fetch(`${API}/obras/${obraId}`, { method: "DELETE" });
+      if (r.ok) {
+        setConfirmDelete(null);
+        setObras(prev => prev.filter(o => o.id !== obraId));
+      }
+    } finally { setDeleting(false); }
   };
 
   return (
@@ -199,8 +212,6 @@ export default function ObrasPage() {
                 const pavTotal = pav.comodos.reduce((s, c) => s + calcOrcComodo(c, precoMap).total, 0);
                 return (
                   <div key={pi} className="border border-zinc-200 rounded-xl overflow-hidden">
-
-                    {/* Pavimento header */}
                     <div className="bg-zinc-50 px-4 py-3 flex items-center gap-3 border-b border-zinc-100 flex-wrap">
                       <span className="text-xs font-bold text-zinc-400 w-4 shrink-0">{pi + 1}</span>
                       <input required value={pav.nome} onChange={e => setPavField(pi, "nome", e.target.value)}
@@ -216,14 +227,11 @@ export default function ObrasPage() {
                       )}
                     </div>
 
-                    {/* Comodos */}
                     <div className="p-3 sm:p-4 space-y-3">
                       {pav.comodos.map((c, ci) => {
                         const orc = calcOrcComodo(c, precoMap);
                         return (
                           <div key={ci} className="border border-zinc-100 rounded-lg p-3 space-y-3 bg-zinc-50/50">
-
-                            {/* Comodo row 1 */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <select value={c.tipo} onChange={e => setComodoField(pi, ci, "tipo", e.target.value)}
                                 className="border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
@@ -246,7 +254,6 @@ export default function ObrasPage() {
                               )}
                             </div>
 
-                            {/* Medidas */}
                             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                               {(["parede1_m2","parede2_m2","parede3_m2","parede4_m2"] as const).map((f, fi) => (
                                 <div key={f}>
@@ -264,7 +271,6 @@ export default function ObrasPage() {
                               </div>
                             </div>
 
-                            {/* Preview orcamento */}
                             {orc.total > 0 && (
                               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 border-t border-zinc-100">
                                 {ETAPAS.map(et => (
@@ -331,10 +337,29 @@ export default function ObrasPage() {
                     <span>·</span>
                     <span>{o.pavimentos.reduce((s, p) => s + p.comodos.length, 0)} comodos</span>
                   </div>
-                  <Link href={`/orcamentos/obras/${o.id}`}
-                    className="text-xs font-medium text-orange-600 hover:text-orange-700 transition-colors">
-                    Ver detalhes →
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link href={`/orcamentos/obras/${o.id}`}
+                      className="text-xs font-medium text-orange-600 hover:text-orange-700 transition-colors">
+                      Ver detalhes →
+                    </Link>
+                    <Link href={`/orcamentos/obras/${o.id}/editar`}
+                      className="text-xs text-zinc-500 hover:text-zinc-700 transition-colors">
+                      Editar
+                    </Link>
+                    {confirmDelete === o.id ? (
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <span className="text-zinc-500">Excluir?</span>
+                        <button onClick={() => handleDelete(o.id)} disabled={deleting}
+                          className="text-red-600 font-medium hover:text-red-700 disabled:opacity-50">Sim</button>
+                        <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(o.id)}
+                        className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
+                        Excluir
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -360,11 +385,30 @@ export default function ObrasPage() {
                       <td className="px-4 py-4 text-center text-zinc-600 tabular-nums">{o.pavimentos.length}</td>
                       <td className="px-4 py-4 text-center text-zinc-600 tabular-nums">{o.pavimentos.reduce((s, p) => s + p.comodos.length, 0)}</td>
                       <td className="px-4 py-4 text-right font-semibold text-zinc-900 tabular-nums">{fmt(o.orcamento_total ?? 0)}</td>
-                      <td className="px-6 py-4 text-right">
-                        <Link href={`/orcamentos/obras/${o.id}`}
-                          className="text-xs font-medium text-orange-600 hover:text-orange-700 transition-colors">
-                          Ver detalhes →
-                        </Link>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link href={`/orcamentos/obras/${o.id}`}
+                            className="text-xs font-medium text-orange-600 hover:text-orange-700 transition-colors whitespace-nowrap">
+                            Ver detalhes →
+                          </Link>
+                          <Link href={`/orcamentos/obras/${o.id}/editar`}
+                            className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+                            Editar
+                          </Link>
+                          {confirmDelete === o.id ? (
+                            <span className="flex items-center gap-1.5 text-xs">
+                              <span className="text-zinc-500">Excluir?</span>
+                              <button onClick={() => handleDelete(o.id)} disabled={deleting}
+                                className="text-red-600 font-medium hover:text-red-700 disabled:opacity-50">Sim</button>
+                              <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setConfirmDelete(o.id)}
+                              className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
+                              Excluir
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

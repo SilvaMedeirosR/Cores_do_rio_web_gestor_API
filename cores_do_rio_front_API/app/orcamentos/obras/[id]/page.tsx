@@ -31,61 +31,65 @@ export default function ObraDetailPage() {
   if (!obra)   return <div className="flex items-center justify-center py-40 text-zinc-400">Obra nao encontrada.</div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
-      <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center flex-wrap gap-2 text-sm text-zinc-400 mb-6">
         <Link href="/orcamentos" className="hover:text-zinc-700">Orcamentos</Link>
         <span>/</span>
         <Link href="/orcamentos/obras" className="hover:text-zinc-700">Obras</Link>
         <span>/</span>
-        <span className="text-zinc-700 font-medium">{obra.nome}</span>
+        <span className="text-zinc-700 font-medium truncate max-w-[160px] sm:max-w-none">{obra.nome}</span>
       </div>
 
-      <div className="flex items-start justify-between mb-8">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">{obra.nome}</h1>
-          <p className="text-zinc-500 mt-1">{obra.local}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{obra.nome}</h1>
+          <p className="text-zinc-500 mt-1 text-sm sm:text-base">{obra.local}</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-zinc-400">Orcamento Total</div>
-          <div className="text-2xl font-bold text-orange-600">{fmt(obra.orcamento_total)}</div>
+        <div className="sm:text-right shrink-0">
+          <div className="text-xs sm:text-sm text-zinc-400">Orcamento Total</div>
+          <div className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(obra.orcamento_total)}</div>
         </div>
       </div>
 
-      <div className="bg-white border border-zinc-200 rounded-xl p-6 mb-6 shadow-sm">
-        <h2 className="text-base font-semibold text-zinc-900 mb-4">Precos por m² / Etapa</h2>
-        <div className="grid grid-cols-5 gap-4">
+      {/* Precos */}
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 mb-6 shadow-sm">
+        <h2 className="text-sm font-semibold text-zinc-900 mb-4">Precos por m² / Etapa</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {ETAPAS.map(e => {
             const p = obra.obra_precos.find(x => x.etapa === e);
             return (
               <div key={e} className="text-center p-3 bg-zinc-50 rounded-lg">
                 <div className="text-xs text-zinc-500 mb-1">{ETAPA_LABELS[e]}</div>
-                <div className="text-base font-semibold text-zinc-800">{p ? fmt(Number(p.preco_m2)) : "—"}</div>
+                <div className="text-sm sm:text-base font-semibold text-zinc-800">{p ? fmt(Number(p.preco_m2)) : "—"}</div>
               </div>
             );
           })}
         </div>
       </div>
 
+      {/* Pavimentos */}
       <div className="space-y-6">
         {obra.pavimentos.map(pav => (
           <div key={pav.id} className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 bg-zinc-50 border-b border-zinc-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-6 py-4 bg-zinc-50 border-b border-zinc-200">
               <div>
                 <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mr-2">Pavimento {pav.numero}</span>
                 <span className="text-base font-semibold text-zinc-900">{pav.nome}</span>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-bold text-orange-600">{fmt(pav.orcamento_total)}</span>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className="text-sm font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
                 <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}`}
-                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors">
+                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors whitespace-nowrap">
                   Ver pavimento
                 </Link>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[640px]">
                 <thead className="bg-zinc-50 border-b border-zinc-100">
                   <tr>
                     <th className="text-left text-xs font-semibold text-zinc-500 px-4 py-2">Comodo</th>
@@ -103,15 +107,15 @@ export default function ObraDetailPage() {
                         <div className="font-medium text-zinc-900 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
                         <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
                       </td>
-                      <td className="px-3 py-3 text-right text-sm text-zinc-600">{fmtN(c.orcamento.total_paredes)}</td>
-                      <td className="px-3 py-3 text-right text-sm text-zinc-600">{fmtN(c.teto_m2)}</td>
+                      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.orcamento.total_paredes)}</td>
+                      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.teto_m2)}</td>
                       {ETAPAS.map(e => (
-                        <td key={e} className="px-3 py-3 text-right text-sm text-zinc-600">{fmt(c.orcamento[e as EtapaKey])}</td>
+                        <td key={e} className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</td>
                       ))}
-                      <td className="px-4 py-3 text-right font-semibold text-orange-600 text-sm">{fmt(c.orcamento.total)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-orange-600 text-sm tabular-nums">{fmt(c.orcamento.total)}</td>
                       <td className="px-3 py-3">
                         <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}/comodos/${c.id}`}
-                          className="text-xs text-orange-600 hover:text-orange-800">Detalhe</Link>
+                          className="text-xs text-orange-600 hover:text-orange-800 whitespace-nowrap">Detalhe</Link>
                       </td>
                     </tr>
                   ))}
@@ -119,7 +123,7 @@ export default function ObraDetailPage() {
                 <tfoot>
                   <tr className="bg-orange-50">
                     <td colSpan={2+ETAPAS.length} className="px-4 py-3 text-sm font-semibold text-zinc-700">Total do Pavimento</td>
-                    <td className="px-4 py-3 text-right font-bold text-orange-600">{fmt(pav.orcamento_total)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -129,9 +133,10 @@ export default function ObraDetailPage() {
         ))}
       </div>
 
-      <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-6 flex items-center justify-between">
-        <span className="text-base font-semibold text-zinc-800">Orcamento Total da Obra</span>
-        <span className="text-2xl font-bold text-orange-600">{fmt(obra.orcamento_total)}</span>
+      {/* Total geral */}
+      <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span className="text-sm sm:text-base font-semibold text-zinc-800">Orcamento Total da Obra</span>
+        <span className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(obra.orcamento_total)}</span>
       </div>
     </div>
   );

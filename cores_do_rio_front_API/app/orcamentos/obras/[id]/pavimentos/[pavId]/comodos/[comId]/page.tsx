@@ -39,67 +39,68 @@ export default function ComodoDetailPage() {
   const orc  = comodo.orcamento;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
-      <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
-        <Link href="/orcamentos" className="hover:text-zinc-700">Orcamentos</Link>
+      {/* Breadcrumb */}
+      <div className="flex items-center flex-wrap gap-2 text-sm text-zinc-400 mb-6">
+        <Link href="/orcamentos" className="hover:text-zinc-700 shrink-0">Orcamentos</Link>
         <span>/</span>
-        <Link href="/orcamentos/obras" className="hover:text-zinc-700">Obras</Link>
+        <Link href="/orcamentos/obras" className="hover:text-zinc-700 shrink-0">Obras</Link>
         <span>/</span>
-        <Link href={`/orcamentos/obras/${id}`} className="hover:text-zinc-700">{obra.nome}</Link>
+        <Link href={`/orcamentos/obras/${id}`} className="hover:text-zinc-700 truncate max-w-[100px] sm:max-w-none">{obra.nome}</Link>
         <span>/</span>
-        <Link href={`/orcamentos/obras/${id}/pavimentos/${pavId}`} className="hover:text-zinc-700">{pav.nome}</Link>
+        <Link href={`/orcamentos/obras/${id}/pavimentos/${pavId}`} className="hover:text-zinc-700 truncate max-w-[80px] sm:max-w-none">{pav.nome}</Link>
         <span>/</span>
         <span className="text-zinc-700 font-medium">{comodo.nome || TIPO_LABELS[comodo.tipo]}</span>
       </div>
 
-      <div className="flex items-start justify-between mb-8">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
-          <p className="text-sm text-zinc-400 mb-1">{obra.nome} / Pav. {pav.numero} — {pav.nome}</p>
-          <h1 className="text-3xl font-bold text-zinc-900">{comodo.nome || TIPO_LABELS[comodo.tipo]}</h1>
+          <p className="text-xs sm:text-sm text-zinc-400 mb-1">{obra.nome} / Pav. {pav.numero} — {pav.nome}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{comodo.nome || TIPO_LABELS[comodo.tipo]}</h1>
           <p className="text-zinc-400 text-sm mt-1">{TIPO_LABELS[comodo.tipo]}</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-zinc-400">Orcamento do Comodo</div>
-          <div className="text-2xl font-bold text-orange-600">{fmt(orc.total)}</div>
+        <div className="sm:text-right shrink-0">
+          <div className="text-xs sm:text-sm text-zinc-400">Orcamento do Comodo</div>
+          <div className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(orc.total)}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+      {/* Cards: Medicoes + Precos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
 
-        {/* Medicoes */}
-        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Medicoes</h2>
+        <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
+          <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Medicoes</h2>
           <div className="space-y-3">
             {([1,2,3,4] as const).map(n => (
               <div key={n} className="flex items-center justify-between">
                 <span className="text-sm text-zinc-500">Parede {n}</span>
-                <span className="text-sm font-semibold text-zinc-800">{fmtN(comodo[`parede${n}_m2` as ParadeKey])} m²</span>
+                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{fmtN(comodo[`parede${n}_m2` as ParadeKey])} m²</span>
               </div>
             ))}
             <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
               <span className="text-sm font-semibold text-zinc-700">Total Paredes</span>
-              <span className="text-sm font-bold text-zinc-900">{fmtN(orc.total_paredes)} m²</span>
+              <span className="text-sm font-bold text-zinc-900 tabular-nums">{fmtN(orc.total_paredes)} m²</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-zinc-500">Teto</span>
-              <span className="text-sm font-semibold text-zinc-800">{fmtN(comodo.teto_m2)} m²</span>
+              <span className="text-sm font-semibold text-zinc-800 tabular-nums">{fmtN(comodo.teto_m2)} m²</span>
             </div>
             <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
               <span className="text-sm font-semibold text-zinc-700">Area Total</span>
-              <span className="text-sm font-bold text-zinc-900">{fmtN(orc.total_paredes + Number(comodo.teto_m2))} m²</span>
+              <span className="text-sm font-bold text-zinc-900 tabular-nums">{fmtN(orc.total_paredes + Number(comodo.teto_m2))} m²</span>
             </div>
           </div>
         </div>
 
-        {/* Precos de referencia */}
-        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Precos de Referencia (m²)</h2>
+        <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
+          <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Precos de Referencia (m²)</h2>
           <div className="space-y-3">
             {ETAPAS.map(e => (
               <div key={e} className="flex items-center justify-between">
                 <span className="text-sm text-zinc-500">{ETAPA_LABELS[e]}</span>
-                <span className="text-sm font-semibold text-zinc-800">{fmt(precoMap[e] ?? 0)}</span>
+                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{fmt(precoMap[e] ?? 0)}</span>
               </div>
             ))}
           </div>
@@ -107,36 +108,38 @@ export default function ComodoDetailPage() {
       </div>
 
       {/* Orcamento detalhado */}
-      <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm mb-6">
-        <h2 className="text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Detalhamento do Orcamento</h2>
-        <div className="space-y-0 divide-y divide-zinc-100">
-          <div className="grid grid-cols-4 py-2 text-xs font-semibold text-zinc-400 uppercase">
-            <span>Etapa</span><span className="text-right">Base m²</span><span className="text-right">Preco/m²</span><span className="text-right">Subtotal</span>
-          </div>
-          <div className="grid grid-cols-4 py-3 text-sm">
-            <span className="text-zinc-600">Massa Parede</span>
-            <span className="text-right text-zinc-500">{fmtN(orc.total_paredes)} m²</span>
-            <span className="text-right text-zinc-500">{fmt(precoMap.massa_parede ?? 0)}</span>
-            <span className="text-right font-semibold text-zinc-800">{fmt(orc.massa_parede)}</span>
-          </div>
-          <div className="grid grid-cols-4 py-3 text-sm">
-            <span className="text-zinc-600">Massa Teto</span>
-            <span className="text-right text-zinc-500">{fmtN(comodo.teto_m2)} m²</span>
-            <span className="text-right text-zinc-500">{fmt(precoMap.massa_teto ?? 0)}</span>
-            <span className="text-right font-semibold text-zinc-800">{fmt(orc.massa_teto)}</span>
-          </div>
-          {(["lixacao","pintura","acabamento"] as const).map(e => (
-            <div key={e} className="grid grid-cols-4 py-3 text-sm">
-              <span className="text-zinc-600">{ETAPA_LABELS[e]}</span>
-              <span className="text-right text-zinc-500">{fmtN(orc.total_paredes + Number(comodo.teto_m2))} m²</span>
-              <span className="text-right text-zinc-500">{fmt(precoMap[e] ?? 0)}</span>
-              <span className="text-right font-semibold text-zinc-800">{fmt(orc[e])}</span>
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm mb-6">
+        <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Detalhamento do Orcamento</h2>
+        <div className="overflow-x-auto">
+          <div className="min-w-[400px]">
+            <div className="grid grid-cols-4 py-2 text-xs font-semibold text-zinc-400 uppercase border-b border-zinc-100">
+              <span>Etapa</span><span className="text-right">Base m²</span><span className="text-right">Preco/m²</span><span className="text-right">Subtotal</span>
             </div>
-          ))}
-          <div className="grid grid-cols-4 py-3 bg-orange-50 rounded-b-lg">
-            <span className="font-bold text-zinc-800">Total</span>
-            <span></span><span></span>
-            <span className="text-right font-bold text-orange-600">{fmt(orc.total)}</span>
+            <div className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
+              <span className="text-zinc-600">Massa Parede</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmtN(orc.total_paredes)} m²</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap.massa_parede ?? 0)}</span>
+              <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc.massa_parede)}</span>
+            </div>
+            <div className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
+              <span className="text-zinc-600">Massa Teto</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmtN(comodo.teto_m2)} m²</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap.massa_teto ?? 0)}</span>
+              <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc.massa_teto)}</span>
+            </div>
+            {(["lixacao","pintura","acabamento"] as const).map(e => (
+              <div key={e} className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
+                <span className="text-zinc-600">{ETAPA_LABELS[e]}</span>
+                <span className="text-right text-zinc-500 tabular-nums">{fmtN(orc.total_paredes + Number(comodo.teto_m2))} m²</span>
+                <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap[e] ?? 0)}</span>
+                <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc[e])}</span>
+              </div>
+            ))}
+            <div className="grid grid-cols-4 py-3 bg-orange-50 rounded-b-lg">
+              <span className="font-bold text-zinc-800">Total</span>
+              <span></span><span></span>
+              <span className="text-right font-bold text-orange-600 tabular-nums">{fmt(orc.total)}</span>
+            </div>
           </div>
         </div>
       </div>

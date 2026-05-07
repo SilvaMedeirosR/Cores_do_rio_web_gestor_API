@@ -31,62 +31,65 @@ export default function PavimentoDetailPage() {
   if (!pav)    return <div className="flex items-center justify-center py-40 text-zinc-400">Pavimento nao encontrado.</div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
-      <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center flex-wrap gap-2 text-sm text-zinc-400 mb-6">
         <Link href="/orcamentos" className="hover:text-zinc-700">Orcamentos</Link>
         <span>/</span>
         <Link href="/orcamentos/obras" className="hover:text-zinc-700">Obras</Link>
         <span>/</span>
-        <Link href={`/orcamentos/obras/${id}`} className="hover:text-zinc-700">{pav.obras.nome}</Link>
+        <Link href={`/orcamentos/obras/${id}`} className="hover:text-zinc-700 truncate max-w-[120px] sm:max-w-none">{pav.obras.nome}</Link>
         <span>/</span>
         <span className="text-zinc-700 font-medium">{pav.nome}</span>
       </div>
 
-      <div className="flex items-start justify-between mb-8">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
-          <p className="text-sm text-zinc-400 mb-1">Pavimento {pav.numero} — {pav.obras.nome}</p>
-          <h1 className="text-3xl font-bold text-zinc-900">{pav.nome}</h1>
+          <p className="text-xs sm:text-sm text-zinc-400 mb-1">Pavimento {pav.numero} — {pav.obras.nome}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{pav.nome}</h1>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-zinc-400">Orcamento do Pavimento</div>
-          <div className="text-2xl font-bold text-orange-600">{fmt(pav.orcamento_total)}</div>
+        <div className="sm:text-right shrink-0">
+          <div className="text-xs sm:text-sm text-zinc-400">Orcamento do Pavimento</div>
+          <div className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</div>
         </div>
       </div>
 
+      {/* Comodos */}
       <div className="space-y-4">
         {pav.comodos.map(c => (
           <div key={c.id} className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 bg-zinc-50 border-b border-zinc-100">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-6 py-4 bg-zinc-50 border-b border-zinc-100">
               <div>
                 <span className="text-base font-semibold text-zinc-900">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</span>
                 <span className="ml-2 text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</span>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-orange-600">{fmt(c.orcamento.total)}</span>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className="font-bold text-orange-600 tabular-nums">{fmt(c.orcamento.total)}</span>
                 <Link href={`/orcamentos/obras/${id}/pavimentos/${pavId}/comodos/${c.id}`}
-                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors">
+                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors whitespace-nowrap">
                   Ver comodo
                 </Link>
               </div>
             </div>
-            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Medicoes</h3>
                 <div className="space-y-2">
                   {([1,2,3,4] as const).map(n => (
                     <div key={n} className="flex justify-between text-sm">
                       <span className="text-zinc-500">Parede {n}</span>
-                      <span className="font-medium text-zinc-800">{fmtN(c[`parede${n}_m2` as ParadeKey])} m²</span>
+                      <span className="font-medium text-zinc-800 tabular-nums">{fmtN(c[`parede${n}_m2` as ParadeKey])} m²</span>
                     </div>
                   ))}
                   <div className="flex justify-between text-sm border-t border-zinc-100 pt-2">
                     <span className="text-zinc-500">Total Paredes</span>
-                    <span className="font-semibold text-zinc-800">{fmtN(c.orcamento.total_paredes)} m²</span>
+                    <span className="font-semibold text-zinc-800 tabular-nums">{fmtN(c.orcamento.total_paredes)} m²</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-zinc-500">Teto</span>
-                    <span className="font-medium text-zinc-800">{fmtN(c.teto_m2)} m²</span>
+                    <span className="font-medium text-zinc-800 tabular-nums">{fmtN(c.teto_m2)} m²</span>
                   </div>
                 </div>
               </div>
@@ -96,12 +99,12 @@ export default function PavimentoDetailPage() {
                   {ETAPAS.map(e => (
                     <div key={e} className="flex justify-between text-sm">
                       <span className="text-zinc-500">{ETAPA_LABELS[e]}</span>
-                      <span className="font-medium text-zinc-800">{fmt(c.orcamento[e as EtapaKey])}</span>
+                      <span className="font-medium text-zinc-800 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</span>
                     </div>
                   ))}
                   <div className="flex justify-between text-sm border-t border-zinc-100 pt-2">
                     <span className="font-semibold text-zinc-700">Total Comodo</span>
-                    <span className="font-bold text-orange-600">{fmt(c.orcamento.total)}</span>
+                    <span className="font-bold text-orange-600 tabular-nums">{fmt(c.orcamento.total)}</span>
                   </div>
                 </div>
               </div>
@@ -110,9 +113,10 @@ export default function PavimentoDetailPage() {
         ))}
       </div>
 
-      <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-6 flex items-center justify-between">
-        <span className="text-base font-semibold text-zinc-800">Orcamento Total do Pavimento</span>
-        <span className="text-2xl font-bold text-orange-600">{fmt(pav.orcamento_total)}</span>
+      {/* Total geral */}
+      <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span className="text-sm sm:text-base font-semibold text-zinc-800">Orcamento Total do Pavimento</span>
+        <span className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
       </div>
     </div>
   );

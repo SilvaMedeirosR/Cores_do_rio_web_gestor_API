@@ -14,7 +14,10 @@ model comodos {
   pavimento_id String          @db.Uuid
   tipo         tipo_comodo
   nome         String?
-  paredes_m2   Decimal         @default(0) @db.Decimal(8, 2)
+  parede1_m2   Decimal         @default(0) @db.Decimal(8, 2)
+  parede2_m2   Decimal         @default(0) @db.Decimal(8, 2)
+  parede3_m2   Decimal         @default(0) @db.Decimal(8, 2)
+  parede4_m2   Decimal         @default(0) @db.Decimal(8, 2)
   teto_m2      Decimal         @default(0) @db.Decimal(8, 2)
   etapa_atual  etapa_processo? @default(massa_parede)
   created_at   DateTime?       @default(now()) @db.Timestamptz(6)

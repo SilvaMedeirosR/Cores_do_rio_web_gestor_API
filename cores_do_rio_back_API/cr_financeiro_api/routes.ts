@@ -10,6 +10,37 @@ export interface Route {
 }
 
 const ETAPAS = ['massa_parede', 'massa_teto', 'lixacao', 'pintura', 'acabamento'] as const;
+type Etapa = typeof ETAPAS[number];
+
+interface ComodoMedidas {
+  id: string;
+  parede1_m2: unknown;
+  parede2_m2: unknown;
+  parede3_m2: unknown;
+  parede4_m2: unknown;
+  teto_m2: unknown;
+  tipo: string;
+  nome: string | null;
+  etapa_atual: string | null;
+  pavimento_id: string;
+}
+
+function calcOrcamentoComodo(c: ComodoMedidas, precoMap: Record<string, number>): Record<Etapa, number> & { total: number } {
+  const totalParedes =
+    Number(c.parede1_m2) + Number(c.parede2_m2) +
+    Number(c.parede3_m2) + Number(c.parede4_m2);
+  const teto      = Number(c.teto_m2);
+  const totalArea = totalParedes + teto;
+  const etapas = {
+    massa_parede: totalParedes * (precoMap.massa_parede ?? 0),
+    massa_teto:   teto         * (precoMap.massa_teto   ?? 0),
+    lixacao:      totalArea    * (precoMap.lixacao      ?? 0),
+    pintura:      totalArea    * (precoMap.pintura      ?? 0),
+    acabamento:   totalArea    * (precoMap.acabamento   ?? 0),
+  };
+  const total = Object.values(etapas).reduce((s, v) => s + v, 0);
+  return { ...etapas, total };
+}
 
 // ── Lancamentos ───────────────────────────────────────────────────────────────
 
@@ -24,9 +55,7 @@ async function criarLancamento(req: VercelRequest, res: VercelResponse) {
   if (!body || typeof body !== 'object') {
     return res.status(400).json({ error: 'Corpo da requisicao invalido' });
   }
-
   const { descricao, valor, tipo, categoria, data } = body as Record<string, unknown>;
-
   if (!descricao || typeof descricao !== 'string' || descricao.trim() === '') {
     return res.status(400).json({ error: 'Campo "descricao" e obrigatorio' });
   }
@@ -36,48 +65,191 @@ async function criarLancamento(req: VercelRequest, res: VercelResponse) {
   if (tipo !== 'receita' && tipo !== 'despesa') {
     return res.status(400).json({ error: 'Campo "tipo" deve ser "receita" ou "despesa"' });
   }
-
-  const payload: Record<string, unknown> = {
-    descricao: descricao.trim(),
-    valor: Number(valor),
-    tipo,
-  };
+  const payload: Record<string, unknown> = { descricao: (descricao as string).trim(), valor: Number(valor), tipo };
   if (categoria !== undefined && categoria !== null && String(categoria).trim() !== '') payload.categoria = String(categoria).trim();
   if (data) payload.data = String(data);
-
   const { data: result, error } = await supabase.from('lancamentos').insert(payload).select().single();
   if (error) return res.status(500).json({ error: error.message });
   return res.status(201).json({ message: 'Lancamento financeiro criado com sucesso', data: result });
 }
 
-// ── Progresso ─────────────────────────────────────────────────────────────────
+// ── Obras (visao financeira) ──────────────────────────────────────────────────
+
+async function listarObras(_req: VercelRequest, res: VercelResponse) {
+  const { data: obras, error } = await supabase
+    .from('obras')
+    .select(`
+      id, nome, local, created_at,
+      obra_precos(etapa, preco_m2),
+      pavimentos(
+        id,
+        comodos(id, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2)
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!obras || obras.length === 0) return res.status(200).json({ data: [] });
+
+  type ObraRow = typeof obras[0];
+  const allComodoIds = (obras as ObraRow[]).flatMap((o: ObraRow) =>
+    (o.pavimentos as Array<{ comodos: Array<{ id: string }> }>).flatMap(p => p.comodos.map(c => c.id))
+  );
+
+  const { data: progresso } = allComodoIds.length > 0
+    ? await supabase.from('etapa_progresso').select('comodo_id, valor_pago').in('comodo_id', allComodoIds)
+    : { data: [] };
+
+  const pagoMap: Record<string, number> = {};
+  for (const p of (progresso ?? [])) {
+    pagoMap[p.comodo_id] = (pagoMap[p.comodo_id] ?? 0) + Number(p.valor_pago);
+  }
+
+  const result = (obras as ObraRow[]).map((o: ObraRow) => {
+    const precoMap = Object.fromEntries(
+      (o.obra_precos as Array<{ etapa: string; preco_m2: unknown }>).map(p => [p.etapa, Number(p.preco_m2)])
+    );
+    let orcamento_total = 0;
+    let valor_pago = 0;
+    let num_comodos = 0;
+    for (const pav of (o.pavimentos as Array<{ comodos: ComodoMedidas[] }>)) {
+      for (const c of pav.comodos) {
+        orcamento_total += calcOrcamentoComodo(c, precoMap).total;
+        valor_pago      += pagoMap[c.id] ?? 0;
+        num_comodos++;
+      }
+    }
+    return {
+      id: o.id,
+      nome: o.nome,
+      local: o.local,
+      orcamento_total,
+      valor_pago,
+      num_pavimentos: (o.pavimentos as unknown[]).length,
+      num_comodos,
+    };
+  });
+
+  return res.status(200).json({ data: result });
+}
+
+async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?: Record<string, string>) {
+  const obraId = params?.obraId;
+  if (!obraId) return res.status(400).json({ error: 'obraId obrigatorio' });
+
+  const { data: obra, error } = await supabase
+    .from('obras')
+    .select(`
+      id, nome, local,
+      obra_precos(etapa, preco_m2),
+      pavimentos(
+        id, nome, numero,
+        comodos(id, tipo, nome, etapa_atual, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2)
+      )
+    `)
+    .eq('id', obraId)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  type ObraDetail = typeof obra;
+  const precoMap = Object.fromEntries(
+    ((obra as ObraDetail).obra_precos as Array<{ etapa: string; preco_m2: unknown }>).map(p => [p.etapa, Number(p.preco_m2)])
+  );
+
+  const allComodoIds = ((obra as ObraDetail).pavimentos as Array<{ comodos: ComodoMedidas[] }>)
+    .flatMap(p => p.comodos.map(c => c.id));
+
+  // Auto-create missing etapa_progresso records
+  const { data: existingProg } = await supabase
+    .from('etapa_progresso').select('comodo_id, etapa').in('comodo_id', allComodoIds);
+
+  const existingSet = new Set((existingProg ?? []).map((r: { comodo_id: string; etapa: string }) => `${r.comodo_id}:${r.etapa}`));
+  const toInsert: Array<{ comodo_id: string; etapa: string; valor_pago: number; concluida: boolean }> = [];
+  for (const comodoId of allComodoIds) {
+    for (const etapa of ETAPAS) {
+      if (!existingSet.has(`${comodoId}:${etapa}`)) {
+        toInsert.push({ comodo_id: comodoId, etapa, valor_pago: 0, concluida: false });
+      }
+    }
+  }
+  if (toInsert.length > 0) await supabase.from('etapa_progresso').insert(toInsert);
+
+  const { data: progresso } = await supabase
+    .from('etapa_progresso').select('comodo_id, etapa, valor_pago, concluida').in('comodo_id', allComodoIds);
+
+  type ProgRecord = { comodo_id: string; etapa: string; valor_pago: number; concluida: boolean };
+  const progMap: Record<string, Record<string, ProgRecord>> = {};
+  for (const p of ((progresso ?? []) as ProgRecord[])) {
+    if (!progMap[p.comodo_id]) progMap[p.comodo_id] = {};
+    progMap[p.comodo_id][p.etapa] = p;
+  }
+
+  let obra_orcamento = 0;
+  let obra_pago = 0;
+
+  const pavimentos = ((obra as ObraDetail).pavimentos as Array<{
+    id: string; nome: string; numero: number; comodos: ComodoMedidas[];
+  }>)
+    .sort((a, b) => a.numero - b.numero)
+    .map(pav => {
+      let pav_orcamento = 0;
+      let pav_pago = 0;
+
+      const comodos = pav.comodos.map(c => {
+        const orcEtapas = calcOrcamentoComodo(c, precoMap);
+        const etapas = ETAPAS.map(e => {
+          const orcEtapa = orcEtapas[e];
+          const prog = progMap[c.id]?.[e];
+          const valor_pago = prog ? Number(prog.valor_pago) : 0;
+          const concluida  = prog?.concluida || valor_pago >= orcEtapa;
+          return { etapa: e, orcamento: orcEtapa, valor_pago, concluida };
+        });
+        const comodo_pago = etapas.reduce((s, e) => s + e.valor_pago, 0);
+        pav_orcamento += orcEtapas.total;
+        pav_pago      += comodo_pago;
+        return {
+          id: c.id,
+          tipo: c.tipo,
+          nome: c.nome,
+          etapa_atual: c.etapa_atual ?? 'massa_parede',
+          orcamento_total: orcEtapas.total,
+          valor_pago: comodo_pago,
+          etapas,
+        };
+      });
+
+      obra_orcamento += pav_orcamento;
+      obra_pago      += pav_pago;
+      return { id: pav.id, nome: pav.nome, numero: pav.numero, orcamento_total: pav_orcamento, valor_pago: pav_pago, comodos };
+    });
+
+  return res.status(200).json({
+    data: {
+      id: (obra as ObraDetail).id,
+      nome: (obra as ObraDetail).nome,
+      local: (obra as ObraDetail).local,
+      orcamento_total: obra_orcamento,
+      valor_pago: obra_pago,
+      pavimentos,
+    },
+  });
+}
+
+// ── Progresso (endpoints antigos mantidos para compatibilidade) ───────────────
 
 async function getProgressoComodo(_req: VercelRequest, res: VercelResponse, params?: Record<string, string>) {
   const comodoId = params?.comodoId;
   if (!comodoId) return res.status(400).json({ error: 'comodoId obrigatorio' });
-
-  const { data: existing, error: fetchErr } = await supabase
-    .from('etapa_progresso')
-    .select('etapa')
-    .eq('comodo_id', comodoId);
-
+  const { data: existing, error: fetchErr } = await supabase.from('etapa_progresso').select('etapa').eq('comodo_id', comodoId);
   if (fetchErr) return res.status(500).json({ error: fetchErr.message });
-
   const existingSet = new Set((existing ?? []).map((r: { etapa: string }) => r.etapa));
-  const toInsert = ETAPAS
-    .filter(e => !existingSet.has(e))
-    .map(e => ({ comodo_id: comodoId, etapa: e, valor_pago: 0, concluida: false }));
-
+  const toInsert = ETAPAS.filter(e => !existingSet.has(e)).map(e => ({ comodo_id: comodoId, etapa: e, valor_pago: 0, concluida: false }));
   if (toInsert.length > 0) {
     const { error: insertErr } = await supabase.from('etapa_progresso').insert(toInsert);
     if (insertErr) return res.status(500).json({ error: insertErr.message });
   }
-
-  const { data, error } = await supabase
-    .from('etapa_progresso')
-    .select('*')
-    .eq('comodo_id', comodoId);
-
+  const { data, error } = await supabase.from('etapa_progresso').select('*').eq('comodo_id', comodoId);
   if (error) return res.status(500).json({ error: error.message });
   return res.status(200).json({ data });
 }
@@ -85,19 +257,9 @@ async function getProgressoComodo(_req: VercelRequest, res: VercelResponse, para
 async function getProgressoComodos(req: VercelRequest, res: VercelResponse) {
   const rawIds = req.query.ids;
   if (!rawIds) return res.status(400).json({ error: 'ids obrigatorio' });
-
-  const ids = (Array.isArray(rawIds) ? rawIds : [rawIds])
-    .flatMap(s => s.split(','))
-    .map(s => s.trim())
-    .filter(Boolean);
-
+  const ids = (Array.isArray(rawIds) ? rawIds : [rawIds]).flatMap(s => s.split(',')).map(s => s.trim()).filter(Boolean);
   if (ids.length === 0) return res.status(400).json({ error: 'ids obrigatorio' });
-
-  const { data, error } = await supabase
-    .from('etapa_progresso')
-    .select('*')
-    .in('comodo_id', ids);
-
+  const { data, error } = await supabase.from('etapa_progresso').select('*').in('comodo_id', ids);
   if (error) return res.status(500).json({ error: error.message });
   return res.status(200).json({ data: data ?? [] });
 }
@@ -109,9 +271,11 @@ function healthCheck(_req: VercelRequest, res: VercelResponse) {
 }
 
 export const routes: Route[] = [
-  { method: 'GET',  path: '/',                           handler: listarLancamentos  },
-  { method: 'POST', path: '/',                           handler: criarLancamento    },
-  { method: 'GET',  path: '/progresso/comodo/:comodoId', handler: getProgressoComodo },
+  { method: 'GET',  path: '/',                           handler: listarLancamentos   },
+  { method: 'POST', path: '/',                           handler: criarLancamento     },
+  { method: 'GET',  path: '/obras',                      handler: listarObras         },
+  { method: 'GET',  path: '/obras/:obraId',              handler: getObraDetalhe      },
+  { method: 'GET',  path: '/progresso/comodo/:comodoId', handler: getProgressoComodo  },
   { method: 'GET',  path: '/progresso',                  handler: getProgressoComodos },
-  { method: 'GET',  path: '/health',                     handler: healthCheck        },
+  { method: 'GET',  path: '/health',                     handler: healthCheck         },
 ];

@@ -1,6 +1,21 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { routes } from '../routes';
 
+function matchPath(routePath: string, requestPath: string): Record<string, string> | null {
+  const rSegs = routePath.split('/');
+  const pSegs = requestPath.split('/');
+  if (rSegs.length !== pSegs.length) return null;
+  const params: Record<string, string> = {};
+  for (let i = 0; i < rSegs.length; i++) {
+    if (rSegs[i].startsWith(':')) {
+      params[rSegs[i].slice(1)] = decodeURIComponent(pSegs[i]);
+    } else if (rSegs[i] !== pSegs[i]) {
+      return null;
+    }
+  }
+  return params;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,13 +28,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const path = url.pathname;
     const method = req.method || 'GET';
 
-    const pathRoutes = routes.filter(r => r.path === path);
-    if (pathRoutes.length === 0) return res.status(404).json({ error: 'Rota nao encontrada' });
+    let pathFound = false;
+    for (const route of routes) {
+      const params = matchPath(route.path, path);
+      if (params === null) continue;
+      pathFound = true;
+      if (route.method !== method) continue;
+      return await route.handler(req, res, params);
+    }
 
-    const route = pathRoutes.find(r => r.method === method);
-    if (!route) return res.status(405).json({ error: 'Metodo nao permitido' });
-
-    return await route.handler(req, res);
+    if (!pathFound) return res.status(404).json({ error: 'Rota nao encontrada' });
+    return res.status(405).json({ error: 'Metodo nao permitido' });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor' });

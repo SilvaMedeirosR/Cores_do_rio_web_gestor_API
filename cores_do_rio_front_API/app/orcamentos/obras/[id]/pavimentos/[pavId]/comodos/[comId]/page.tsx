@@ -3,12 +3,16 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
-const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"];
+const API     = process.env.NEXT_PUBLIC_API_ORCAMENTO  ?? "";
+const API_FIN = process.env.NEXT_PUBLIC_API_FINANCEIRO ?? "";
+
+const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"] as const;
+type Etapa = typeof ETAPAS[number];
 const ETAPA_LABELS: Record<string,string> = { massa_parede:"Massa Parede", massa_teto:"Massa Teto", lixacao:"Lixacao", pintura:"Pintura", acabamento:"Acabamento" };
 const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada" };
 const fmt  = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const fmtN = (v: unknown) => Number(v).toFixed(2).replace(".",",");
+const pct  = (pago: number, teto: number) => teto > 0 ? Math.min(Math.round((pago / teto) * 100), 100) : 0;
 
 type ParadeKey = "parede1_m2"|"parede2_m2"|"parede3_m2"|"parede4_m2";
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
@@ -18,16 +22,24 @@ interface Comodo {
   orcamento:OrcComodo;
   pavimentos: { id:string; nome:string; numero:number; obras: { id:string; nome:string; obra_precos:{etapa:string;preco_m2:number}[] } };
 }
+interface ProgressoEtapa { id:string; comodo_id:string; etapa:string; valor_pago:number; concluida:boolean; }
 
 export default function ComodoDetailPage() {
   const { id, pavId, comId } = useParams<{ id: string; pavId: string; comId: string }>();
-  const [comodo, setComodo]    = useState<Comodo | null>(null);
-  const [loading, setLoading]  = useState(true);
+  const [comodo,   setComodo]   = useState<Comodo | null>(null);
+  const [progresso, setProgresso] = useState<ProgressoEtapa[]>([]);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     fetch(`${API}/comodos/${comId}`)
       .then(r => r.json()).then(j => setComodo(j.data ?? null))
       .finally(() => setLoading(false));
+  }, [comId]);
+
+  useEffect(() => {
+    if (!comId) return;
+    fetch(`${API_FIN}/progresso/comodo/${comId}`)
+      .then(r => r.json()).then(j => setProgresso(j.data ?? []));
   }, [comId]);
 
   if (loading) return <div className="flex items-center justify-center py-40 text-zinc-400">Carregando...</div>;
@@ -37,6 +49,9 @@ export default function ComodoDetailPage() {
   const obra = pav.obras;
   const precoMap = Object.fromEntries(obra.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
   const orc  = comodo.orcamento;
+
+  const totalPago = progresso.reduce((s, p) => s + Number(p.valor_pago), 0);
+  const totalPct  = pct(totalPago, orc.total);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -132,7 +147,7 @@ export default function ComodoDetailPage() {
                 <span className="text-zinc-600">{ETAPA_LABELS[e]}</span>
                 <span className="text-right text-zinc-500 tabular-nums">{fmtN(orc.total_paredes + Number(comodo.teto_m2))} m²</span>
                 <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap[e] ?? 0)}</span>
-                <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc[e])}</span>
+                <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc[e as Etapa])}</span>
               </div>
             ))}
             <div className="grid grid-cols-4 py-3 bg-orange-50 rounded-b-lg">
@@ -141,6 +156,55 @@ export default function ComodoDetailPage() {
               <span className="text-right font-bold text-orange-600 tabular-nums">{fmt(orc.total)}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Progresso Financeiro */}
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
+        <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-5">Progresso Financeiro</h2>
+        <div className="space-y-5">
+          {ETAPAS.map(e => {
+            const prog      = progresso.find(p => p.etapa === e);
+            const teto      = orc[e as Etapa];
+            const pago      = prog ? Number(prog.valor_pago) : 0;
+            const concluida = prog?.concluida ?? false;
+            const p         = pct(pago, teto);
+            return (
+              <div key={e}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-700">{ETAPA_LABELS[e]}</span>
+                    {concluida && (
+                      <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Concluida</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-zinc-400 tabular-nums">{fmt(pago)} / {fmt(teto)}</span>
+                </div>
+                <div className="relative h-2.5 bg-zinc-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${concluida ? "bg-emerald-500" : "bg-orange-500"}`}
+                    style={{ width: `${p}%` }}
+                  />
+                </div>
+                <div className="text-right text-xs text-zinc-400 mt-0.5 tabular-nums">{p}%</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Barra total do comodo */}
+        <div className="mt-6 pt-5 border-t border-zinc-100">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-bold text-zinc-800">Total do Comodo</span>
+            <span className="text-xs text-zinc-500 tabular-nums">{fmt(totalPago)} / {fmt(orc.total)}</span>
+          </div>
+          <div className="h-3 bg-zinc-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-orange-600 rounded-full transition-all duration-500"
+              style={{ width: `${totalPct}%` }}
+            />
+          </div>
+          <div className="text-right text-xs text-zinc-400 mt-0.5 tabular-nums">{totalPct}%</div>
         </div>
       </div>
     </div>

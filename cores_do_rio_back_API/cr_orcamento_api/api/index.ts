@@ -16,12 +16,24 @@ function matchRoute(routePath: string, reqPath: string): Record<string, string> 
   return params;
 }
 
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
+  .split(',').map(o => o.trim());
+
+function setCors(req: VercelRequest, res: VercelResponse): boolean {
+  const origin = req.headers.origin as string | undefined;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') { res.status(200).end(); return true; }
+  return false;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (setCors(req, res)) return;
 
     const url    = new URL(req.url || '/', 'http://localhost');
     const path   = url.pathname;

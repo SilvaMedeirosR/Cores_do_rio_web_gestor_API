@@ -9,6 +9,7 @@ import {
 } from './dominio/client';
 import { dominioToFuncionario, alteracaoToDominioS2206 } from './dominio/mapper';
 import type { DominioWebhookPayload } from './dominio/types';
+import { listarFuncionarios as pontotelListar } from './pontotel/client';
 
 export type RouteHandler = (
   req: VercelRequest,
@@ -427,6 +428,18 @@ function healthCheck(_req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ status: 'ok', api: 'cr-dep-pess-api', timestamp: new Date().toISOString() });
 }
 
+// ── PontoTel ──────────────────────────────────────────────────────────────────
+
+async function pontotelFuncionarios(_req: VercelRequest, res: VercelResponse) {
+  try {
+    const funcionarios = await pontotelListar();
+    return res.status(200).json({ data: funcionarios, total: funcionarios.length });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Erro ao consultar PontoTel';
+    return res.status(502).json({ error: msg });
+  }
+}
+
 export const routes: Route[] = [
   // Funcionários — CRUD interno
   { method: 'GET',    path: '/funcionarios',                                 handler: listarFuncionarios          },
@@ -447,5 +460,7 @@ export const routes: Route[] = [
   { method: 'GET',    path: '/dominio/eventos/status/:protocolo',            handler: dominioStatusEvento         },
   // Domínio — webhook de retorno assíncrono
   { method: 'POST',   path: '/dominio/webhook',                              handler: dominioWebhook              },
+  // PontoTel — integração com sistema de ponto externo
+  { method: 'GET',    path: '/pontotel/funcionarios',                        handler: pontotelFuncionarios        },
   { method: 'GET',    path: '/health',                                       handler: healthCheck                 },
 ];

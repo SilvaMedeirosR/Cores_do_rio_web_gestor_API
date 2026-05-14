@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 const API  = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"];
 const ETAPA_LABELS: Record<string,string> = { massa_parede:"Massa Parede", massa_teto:"Massa Teto", lixacao:"Lixacao", pintura:"Pintura", acabamento:"Acabamento" };
-const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada" };
+const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", corredor:"Corredor", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada", casa_maquinas:"Casa de Maquinas", casa_exaustao:"Casa de Exaustao", estacionamento:"Estacionamento", garagem:"Garagem", deposito:"Deposito", area_lazer:"Area de Lazer" };
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const fmtN = (v: unknown) => Number(v).toFixed(2).replace(".",",");
 
@@ -15,8 +15,10 @@ const INPUT_SM = "border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zin
 type EtapaKey = "massa_parede"|"massa_teto"|"lixacao"|"pintura"|"acabamento";
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
 interface Comodo { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; orcamento:OrcComodo; }
-interface Pavimento { id:string; nome:string; numero:number; comodos:Comodo[]; orcamento_total:number; }
-interface Obra { id:string; nome:string; local:string; created_at:string; orcamento_total:number; obra_precos:{etapa:string;preco_m2:number}[]; pavimentos:Pavimento[]; }
+interface ApartamentoTipo { id:string; nome:string; }
+interface Apartamento { id:string; nome:string|null; numero:number|null; tipo_id:string|null; apartamento_tipos:ApartamentoTipo|null; comodos:Comodo[]; orcamento_total:number; }
+interface Pavimento { id:string; nome:string; numero:number; tipo:string; comodos:Comodo[]; apartamentos:Apartamento[]; orcamento_total:number; }
+interface Obra { id:string; nome:string; local:string; created_at:string; orcamento_total:number; obra_precos:{etapa:string;preco_m2:number}[]; pavimentos:Pavimento[]; apartamento_tipos:ApartamentoTipo[]; }
 
 export default function ObraDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +34,7 @@ export default function ObraDetailPage() {
   const [newPavNum, setNewPavNum]     = useState("");
   const [submittingPav, setSubPav]    = useState(false);
   const [erroPav, setErroPav]         = useState<string | null>(null);
+  const [expandedPav, setExpandedPav] = useState<Record<string,boolean>>({});
 
   const fetchObra = useCallback(async () => {
     try { const r = await fetch(`${API}/obras/${id}`); const j = await r.json(); setObra(j.data ?? null); }
@@ -39,6 +42,9 @@ export default function ObraDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchObra(); }, [fetchObra]);
+
+  const togglePav = (pavId: string) =>
+    setExpandedPav(p => ({ ...p, [pavId]: !p[pavId] }));
 
   const handleDeleteObra = async () => {
     setDeletingObra(true);
@@ -73,6 +79,12 @@ export default function ObraDetailPage() {
   if (loading) return <div className="flex items-center justify-center py-40 text-zinc-400">Carregando...</div>;
   if (!obra)   return <div className="flex items-center justify-center py-40 text-zinc-400">Obra nao encontrada.</div>;
 
+  const aptLabel = (apt: Apartamento) => {
+    const n = apt.nome ?? (apt.numero != null ? `Apto ${apt.numero}` : "Apartamento");
+    const t = apt.apartamento_tipos?.nome ? ` · ${apt.apartamento_tipos.nome}` : "";
+    return n + t;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
@@ -90,6 +102,15 @@ export default function ObraDetailPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{obra.nome}</h1>
           <p className="text-zinc-500 mt-1 text-sm sm:text-base">{obra.local}</p>
+          {obra.apartamento_tipos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {obra.apartamento_tipos.map(t => (
+                <span key={t.id} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">
+                  {t.nome}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-col sm:items-end gap-3 shrink-0">
           <div className="sm:text-right">
@@ -135,79 +156,133 @@ export default function ObraDetailPage() {
       </div>
 
       {/* Pavimentos */}
-      <div className="space-y-6">
-        {obra.pavimentos.map(pav => (
-          <div key={pav.id} className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-6 py-4 bg-zinc-50 border-b border-zinc-200">
-              <div>
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mr-2">Pavimento {pav.numero}</span>
-                <span className="text-base font-semibold text-zinc-900">{pav.nome}</span>
-              </div>
-              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-                <span className="text-sm font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
-                <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}`}
-                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors whitespace-nowrap">
-                  Ver pavimento
-                </Link>
-                {confirmDeletePav === pav.id ? (
-                  <span className="flex items-center gap-1.5 text-xs">
-                    <span className="text-zinc-500">Excluir?</span>
-                    <button onClick={() => handleDeletePav(pav.id)} disabled={deletingPav}
-                      className="text-red-600 font-semibold hover:text-red-700 disabled:opacity-50">Sim</button>
-                    <button onClick={() => setConfirmDeletePav(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
-                  </span>
-                ) : (
-                  <button onClick={() => setConfirmDeletePav(pav.id)}
-                    className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
-                    Excluir
-                  </button>
-                )}
-              </div>
-            </div>
+      <div className="space-y-4">
+        {obra.pavimentos.map(pav => {
+          const totalApts  = pav.apartamentos.length;
+          const totalAvul  = pav.comodos.length;
+          const expanded   = expandedPav[pav.id] ?? false;
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px]">
-                <thead className="bg-zinc-50 border-b border-zinc-100">
-                  <tr>
-                    <th className="text-left text-xs font-semibold text-zinc-500 px-4 py-2">Comodo</th>
-                    <th className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">Paredes m²</th>
-                    <th className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">Teto m²</th>
-                    {ETAPAS.map(e => <th key={e} className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">{ETAPA_LABELS[e]}</th>)}
-                    <th className="text-right text-xs font-semibold text-zinc-500 px-4 py-2">Total</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-50">
-                  {pav.comodos.map(c => (
-                    <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-zinc-900 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
-                        <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
-                      </td>
-                      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.orcamento.total_paredes)}</td>
-                      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.teto_m2)}</td>
-                      {ETAPAS.map(e => (
-                        <td key={e} className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</td>
-                      ))}
-                      <td className="px-4 py-3 text-right font-semibold text-orange-600 text-sm tabular-nums">{fmt(c.orcamento.total)}</td>
-                      <td className="px-3 py-3">
-                        <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}/comodos/${c.id}`}
-                          className="text-xs text-orange-600 hover:text-orange-800 whitespace-nowrap">Detalhe</Link>
-                      </td>
-                    </tr>
+          return (
+            <div key={pav.id} className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+
+              {/* Pavimento header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-6 py-4 bg-zinc-50 border-b border-zinc-200">
+                <button onClick={() => togglePav(pav.id)} className="flex items-center gap-2 text-left min-w-0">
+                  <svg className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  <div>
+                    <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mr-2">{pav.tipo === "subsolo" ? "Subsolo" : "Pavimento"} {pav.numero}</span>
+                    <span className="text-base font-semibold text-zinc-900">{pav.nome}</span>
+                  </div>
+                </button>
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-6 sm:pl-0">
+                  <div className="flex gap-2 text-xs text-zinc-400">
+                    {totalApts > 0 && <span className="bg-zinc-100 px-2 py-0.5 rounded-full">{totalApts} apto{totalApts !== 1 ? "s" : ""}</span>}
+                    {totalAvul > 0 && <span className="bg-zinc-100 px-2 py-0.5 rounded-full">{totalAvul} avulso{totalAvul !== 1 ? "s" : ""}</span>}
+                  </div>
+                  <span className="text-sm font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
+                  <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}`}
+                    className="text-xs text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 px-3 py-1 rounded-md transition-colors whitespace-nowrap">
+                    Gerenciar
+                  </Link>
+                  {confirmDeletePav === pav.id ? (
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <span className="text-zinc-500">Excluir?</span>
+                      <button onClick={() => handleDeletePav(pav.id)} disabled={deletingPav}
+                        className="text-red-600 font-semibold hover:text-red-700 disabled:opacity-50">Sim</button>
+                      <button onClick={() => setConfirmDeletePav(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setConfirmDeletePav(pav.id)}
+                      className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
+                      Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Detalhes expandidos */}
+              {expanded && (
+                <div className="divide-y divide-zinc-100">
+
+                  {/* Apartamentos */}
+                  {pav.apartamentos.map(apt => (
+                    <div key={apt.id}>
+                      <div className="px-4 sm:px-6 py-2.5 bg-blue-50/40 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-blue-800">{aptLabel(apt)}</span>
+                        <span className="text-xs font-bold text-orange-600 tabular-nums">{fmt(apt.orcamento_total)}</span>
+                      </div>
+                      {apt.comodos.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[540px]">
+                            <tbody className="divide-y divide-zinc-50">
+                              {apt.comodos.map(c => (
+                                <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
+                                  <td className="px-6 py-2.5">
+                                    <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                    <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.orcamento.total_paredes)} m²</td>
+                                  <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.teto_m2)} m²</td>
+                                  {ETAPAS.map(e => (
+                                    <td key={e} className="px-3 py-2.5 text-right text-xs text-zinc-600 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</td>
+                                  ))}
+                                  <td className="px-4 py-2.5 text-right text-sm font-semibold text-orange-600 tabular-nums">{fmt(c.orcamento.total)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-orange-50">
-                    <td colSpan={2+ETAPAS.length} className="px-4 py-3 text-sm font-semibold text-zinc-700">Total do Pavimento</td>
-                    <td className="px-4 py-3 text-right font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+
+                  {/* Cômodos avulsos */}
+                  {pav.comodos.length > 0 && (
+                    <div>
+                      <div className="px-4 sm:px-6 py-2.5 bg-zinc-50 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-zinc-500">Comodos avulsos</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[540px]">
+                          <tbody className="divide-y divide-zinc-50">
+                            {pav.comodos.map(c => (
+                              <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
+                                <td className="px-6 py-2.5">
+                                  <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                  <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
+                                </td>
+                                <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.orcamento.total_paredes)} m²</td>
+                                <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.teto_m2)} m²</td>
+                                {ETAPAS.map(e => (
+                                  <td key={e} className="px-3 py-2.5 text-right text-xs text-zinc-600 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</td>
+                                ))}
+                                <td className="px-4 py-2.5 text-right text-sm font-semibold text-orange-600 tabular-nums">{fmt(c.orcamento.total)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {pav.apartamentos.length === 0 && pav.comodos.length === 0 && (
+                    <div className="px-6 py-8 text-center text-sm text-zinc-400">
+                      Nenhum cômodo ou apartamento. <Link href={`/orcamentos/obras/${obra.id}/pavimentos/${pav.id}`} className="text-orange-600 hover:underline">Adicionar</Link>
+                    </div>
+                  )}
+
+                  {/* Total do pavimento */}
+                  <div className="px-4 sm:px-6 py-3 bg-orange-50 flex justify-between items-center">
+                    <span className="text-sm font-semibold text-zinc-700">Total {pav.nome}</span>
+                    <span className="font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Adicionar pavimento */}

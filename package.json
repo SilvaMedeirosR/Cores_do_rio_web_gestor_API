@@ -8,6 +8,8 @@
     "build": "echo 'Root build skipped. Use individual project roots on Vercel.'"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "typescript": "^5.3.3"
   },
   "devDependencies": {

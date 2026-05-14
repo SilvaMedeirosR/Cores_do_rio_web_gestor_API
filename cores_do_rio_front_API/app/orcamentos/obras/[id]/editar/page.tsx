@@ -14,7 +14,7 @@ const ETAPAS = [
 ];
 
 interface PrecoForm { etapa: string; preco_m2: string; }
-interface ObraEditForm { nome: string; local: string; precos: PrecoForm[]; }
+interface ObraEditForm { nome: string; local: string; empreiteira: string; precos: PrecoForm[]; }
 
 const INPUT = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
 
@@ -37,6 +37,7 @@ export default function ObraEditarPage() {
         setForm({
           nome:  obra.nome,
           local: obra.local,
+          empreiteira: obra.empreiteira ?? "",
           precos: ETAPAS.map(e => {
             const p = (obra.obra_precos ?? []).find((x: { etapa: string; preco_m2: number }) => x.etapa === e.value);
             return { etapa: e.value, preco_m2: p ? String(p.preco_m2) : "" };
@@ -57,6 +58,7 @@ export default function ObraEditarPage() {
       const payload = {
         nome:  form.nome,
         local: form.local,
+        empreiteira: form.empreiteira || null,
         precos: form.precos
           .filter(p => p.preco_m2 !== "")
           .map(p => ({ etapa: p.etapa, preco_m2: parseFloat(p.preco_m2) || 0 })),
@@ -96,7 +98,7 @@ export default function ObraEditarPage() {
         <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
           <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Dados da Obra</h2>
           {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">Nome *</label>
               <input required value={form.nome} onChange={e => setForm(p => p ? { ...p, nome: e.target.value } : p)}
@@ -106,6 +108,11 @@ export default function ObraEditarPage() {
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">Local *</label>
               <input required value={form.local} onChange={e => setForm(p => p ? { ...p, local: e.target.value } : p)}
                 className={INPUT} placeholder="Ex: Rua das Flores, 123" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5">Empreiteira</label>
+              <input value={form.empreiteira} onChange={e => setForm(p => p ? { ...p, empreiteira: e.target.value } : p)}
+                className={INPUT} placeholder="Ex: Construtora Silva" />
             </div>
           </div>
         </div>

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { temAcesso, type Funcao } from "@/lib/auth/permissions";
 
 const FolderIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -48,6 +50,19 @@ export default function Home() {
   const [statuses, setStatuses] = useState<StatusMap>(
     Object.fromEntries(MODULES.map((m) => [m.label, "checking"]))
   );
+  const [funcao, setFuncao] = useState<Funcao | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      const f = data.user?.user_metadata?.funcao as Funcao | undefined;
+      if (f) setFuncao(f);
+    });
+  }, []);
+
+  const modulosVisiveis = funcao
+    ? MODULES.filter(m => m.href === "/" || temAcesso(funcao, m.href))
+    : [];
 
   useEffect(() => {
     MODULES.forEach(async ({ label, api }) => {
@@ -61,7 +76,8 @@ export default function Home() {
     });
   }, []);
 
-  const onlineCount = Object.values(statuses).filter((s) => s === "online").length;
+  const onlineCount = modulosVisiveis.filter(m => statuses[m.label] === "online").length;
+  const totalComApi = modulosVisiveis.filter(m => m.api).length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -69,14 +85,14 @@ export default function Home() {
       <div className="mb-8 sm:mb-10">
         <h1 className="text-3xl sm:text-4xl font-bold text-zinc-900 tracking-tight">Bem-vindo!</h1>
         <p className="text-zinc-400 mt-1.5 text-sm">
-          {onlineCount === MODULES.filter(m => m.api).length
-            ? "Todos os modulos online"
-            : `${onlineCount} de ${MODULES.filter(m => m.api).length} modulos online`}
+          {!funcao ? "Carregando..." : onlineCount === totalComApi
+            ? "Modulo online"
+            : `${onlineCount} de ${totalComApi} modulos online`}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {MODULES.map(({ label, href, desc, icon }) => {
+        {modulosVisiveis.map(({ label, href, desc, icon }) => {
           const status = statuses[label];
           return (
             <Link

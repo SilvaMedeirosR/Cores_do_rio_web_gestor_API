@@ -4,7 +4,8 @@ export type Funcao =
   | "financeiro"
   | "materiais"
   | "gerencia_financeira"
-  | "desenvolvedor";
+  | "desenvolvedor"
+  | "titular";
 
 /** Rota inicial de cada função após login */
 export const FUNCAO_HOME: Record<Funcao, string> = {
@@ -14,6 +15,7 @@ export const FUNCAO_HOME: Record<Funcao, string> = {
   materiais:           "/compras",
   gerencia_financeira: "/financeiro",
   desenvolvedor:       "/",
+  titular:             "/metricas",
 };
 
 /**
@@ -25,7 +27,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; allowed: Funcao[] }[] = [
   { prefix: "/departamento-pessoal", allowed: ["rh"]                                    },
   { prefix: "/financeiro",           allowed: ["financeiro", "gerencia_financeira"]      },
   { prefix: "/compras",              allowed: ["materiais"]                              },
-  { prefix: "/metricas",             allowed: []                                         },
+  { prefix: "/metricas",             allowed: ["titular"]                                },
 ];
 
 /** Retorna true se a função tem acesso ao pathname. */

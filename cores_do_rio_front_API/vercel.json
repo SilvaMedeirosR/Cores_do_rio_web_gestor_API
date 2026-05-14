@@ -5,14 +5,16 @@
     "NEXT_PUBLIC_API_COMPRAS": "https://cr-compras-api.vercel.app",
     "NEXT_PUBLIC_API_DEP_PESS": "https://cr-dep-pess-api.vercel.app",
     "NEXT_PUBLIC_API_FINANCEIRO": "https://cr-financeiro-api.vercel.app",
-    "NEXT_PUBLIC_API_ORCAMENTO": "https://cr-orcamento-api.vercel.app"
+    "NEXT_PUBLIC_API_ORCAMENTO": "https://cr-orcamento-api.vercel.app",
+    "NEXT_PUBLIC_API_METRICAS": "https://cr-metricas-api.vercel.app"
   },
   "build": {
     "env": {
       "NEXT_PUBLIC_API_COMPRAS": "https://cr-compras-api.vercel.app",
       "NEXT_PUBLIC_API_DEP_PESS": "https://cr-dep-pess-api.vercel.app",
       "NEXT_PUBLIC_API_FINANCEIRO": "https://cr-financeiro-api.vercel.app",
-      "NEXT_PUBLIC_API_ORCAMENTO": "https://cr-orcamento-api.vercel.app"
+      "NEXT_PUBLIC_API_ORCAMENTO": "https://cr-orcamento-api.vercel.app",
+      "NEXT_PUBLIC_API_METRICAS": "https://cr-metricas-api.vercel.app"
     }
   }
 }

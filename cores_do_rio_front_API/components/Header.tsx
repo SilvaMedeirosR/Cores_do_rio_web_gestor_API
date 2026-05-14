@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { temAcesso, type Funcao } from "@/lib/auth/permissions";
 
 const ALL_navItems = [
+  { label: "Metricas",     href: "/metricas"             },
   { label: "Orcamentos",   href: "/orcamentos"           },
   { label: "Compras",      href: "/compras"              },
   { label: "Dep. Pessoal", href: "/departamento-pessoal" },
@@ -20,6 +21,7 @@ const FUNCAO_LABEL: Record<string, string> = {
   materiais:           "Materiais",
   gerencia_financeira: "Gerencia Financeira",
   desenvolvedor:       "Desenvolvedor",
+  titular:             "Titular",
 };
 
 interface Profile { nome: string; sobrenome: string; funcao: string; }

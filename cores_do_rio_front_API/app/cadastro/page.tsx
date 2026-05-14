@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 const INPUT = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
 
 const FUNCOES = [
+  { value: "titular",             label: "Titular"             },
   { value: "orcamentista",        label: "Orcamentista"        },
   { value: "rh",                  label: "RH"                  },
   { value: "financeiro",          label: "Financeiro"          },

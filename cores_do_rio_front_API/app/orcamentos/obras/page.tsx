@@ -225,6 +225,11 @@ export default function ObrasPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting]       = useState(false);
   const [busca, setBusca]             = useState("");
+  const [pavCollapsed, setPavCollapsed] = useState<Record<number, boolean>>({});
+  const [aptCollapsed, setAptCollapsed] = useState<Record<string, boolean>>({});
+
+  const togglePav = (pi: number) => setPavCollapsed(p => ({ ...p, [pi]: !p[pi] }));
+  const toggleApt = (pi: number, ai: number) => setAptCollapsed(p => { const k = `${pi}-${ai}`; return { ...p, [k]: !p[k] }; });
 
   const precoMap = Object.fromEntries(form.precos.map(p => [p.etapa, n(p.preco_m2)]));
 
@@ -526,14 +531,28 @@ export default function ObrasPage() {
                         className={`flex-1 min-w-28 ${INPUT_SM}`} placeholder={pav.tipo === "subsolo" ? "Ex: Subsolo 1" : "Ex: Terreo, 1 Andar"} />
                       <input required type="number" value={pav.numero} onChange={e => setPavField(pi, "numero", e.target.value)}
                         className={`w-20 ${INPUT_SM}`} placeholder="N°" />
+                      {pavCollapsed[pi] && (pav.apartamentos.length > 0 || pav.comodos.length > 0) && (
+                        <span className="text-xs text-zinc-400 whitespace-nowrap">
+                          {pav.apartamentos.length > 0 && `${pav.apartamentos.length} apto${pav.apartamentos.length !== 1 ? "s" : ""}`}
+                          {pav.apartamentos.length > 0 && pav.comodos.length > 0 && " · "}
+                          {pav.comodos.length > 0 && `${pav.comodos.length} avulso${pav.comodos.length !== 1 ? "s" : ""}`}
+                        </span>
+                      )}
                       {pavTotal > 0 && <span className="text-xs font-bold text-orange-600 whitespace-nowrap">{fmt(pavTotal)}</span>}
+                      <button type="button" onClick={() => togglePav(pi)}
+                        className="text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded"
+                        title={pavCollapsed[pi] ? "Expandir" : "Minimizar"}>
+                        <svg className={`w-4 h-4 transition-transform ${pavCollapsed[pi] ? "-rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
                       {form.pavimentos.length > 1 && (
                         <button type="button" onClick={() => removePav(pi)}
                           className="text-xs text-zinc-400 hover:text-red-500 transition-colors px-1">Remover</button>
                       )}
                     </div>
 
-                    <div className="divide-y divide-zinc-100">
+                    {!pavCollapsed[pi] && <div className="divide-y divide-zinc-100">
 
                       {/* ── Apartamentos ─────────────────────────────────────── */}
                       <div className="p-3 sm:p-4">
@@ -566,13 +585,23 @@ export default function ObrasPage() {
                                         <option key={t} value={t}>{t}</option>
                                       ))}
                                     </select>
+                                    {aptCollapsed[`${pi}-${ai}`] && apt.comodos.length > 0 && (
+                                      <span className="text-xs text-zinc-400 whitespace-nowrap">{apt.comodos.length} cômodo{apt.comodos.length !== 1 ? "s" : ""}</span>
+                                    )}
                                     {aptComodoTotal > 0 && <span className="text-xs font-bold text-orange-600 whitespace-nowrap">{fmt(aptComodoTotal)}</span>}
+                                    <button type="button" onClick={() => toggleApt(pi, ai)}
+                                      className="text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded"
+                                      title={aptCollapsed[`${pi}-${ai}`] ? "Expandir" : "Minimizar"}>
+                                      <svg className={`w-3.5 h-3.5 transition-transform ${aptCollapsed[`${pi}-${ai}`] ? "-rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                      </svg>
+                                    </button>
                                     <button type="button" onClick={() => removeApt(pi, ai)}
-                                      className="text-xs text-zinc-400 hover:text-red-500 transition-colors px-1 ml-auto">Remover</button>
+                                      className="text-xs text-zinc-400 hover:text-red-500 transition-colors px-1">Remover</button>
                                   </div>
 
                                   {/* Cômodos do apartamento */}
-                                  <div className="p-3 space-y-2">
+                                  {!aptCollapsed[`${pi}-${ai}`] && <div className="p-3 space-y-2">
                                     {apt.comodos.map((c, ci) => {
                                       const orc = calcOrcComodo(c, precoMap);
                                       return (
@@ -611,7 +640,7 @@ export default function ObrasPage() {
                                         </div>
                                       );
                                     })}
-                                  </div>
+                                  </div>}
                                 </div>
                               );
                             })}
@@ -677,7 +706,7 @@ export default function ObrasPage() {
                         )}
                       </div>
 
-                    </div>
+                    </div>}
                   </div>
                 );
               })}

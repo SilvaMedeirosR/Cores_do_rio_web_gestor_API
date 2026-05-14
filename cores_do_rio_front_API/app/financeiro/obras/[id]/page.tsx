@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 
 const API_FIN = process.env.NEXT_PUBLIC_API_FINANCEIRO ?? "";
 const ETAPA_LABELS: Record<string,string> = { massa_parede:"Massa Parede", massa_teto:"Massa Teto", lixacao:"Lixacao", pintura:"Pintura", acabamento:"Acabamento" };
-const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada" };
+const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada", corredor:"Corredor", casa_maquinas:"Casa de Maquinas", casa_exaustao:"Casa de Exaustao", estacionamento:"Estacionamento", garagem:"Garagem", deposito:"Deposito", area_lazer:"Area de Lazer" };
 const fmt     = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const calcPct = (pago: number, teto: number) => teto > 0 ? Math.min(Math.round((pago / teto) * 100), 100) : 0;
 
@@ -131,8 +131,10 @@ export default function FinanceiroObraPage() {
                         {/* Cabeçalho do cômodo */}
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
                           <div>
-                            <div className="font-semibold text-zinc-900">{c.nome || TIPO_LABELS[c.tipo]}</div>
-                            <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
+                            <div className="font-semibold text-zinc-900">
+                              {c.nome ? c.nome : (TIPO_LABELS[c.tipo] ?? c.tipo)}
+                            </div>
+                            {c.nome && <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo] ?? c.tipo}</div>}
                           </div>
                           <div className="sm:text-right shrink-0">
                             <div className="text-xs text-zinc-400">Orcamento</div>

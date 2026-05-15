@@ -22,6 +22,19 @@ const API_PESS = process.env.NEXT_PUBLIC_API_DEP_PESS ?? "";
 
 const IDO_H_DIA = 8; // horas úteis por dia
 
+// Exibe minutos como "Xm" ou "Xh" / "X,Xh" quando >= 60 min.
+function fmtTempo(minutos: number): string {
+  const abs = Math.abs(minutos);
+  if (abs < 60) return `${minutos}m`;
+  const h = minutos / 60;
+  return `${Number.isInteger(h) ? h : h.toFixed(1)}h`;
+}
+
+// Converte faltas (dias inteiros) para string de tempo: cada falta = IDO_H_DIA horas.
+function fmtFaltas(faltas: number): string {
+  return fmtTempo(faltas * IDO_H_DIA * 60);
+}
+
 // IDO de um único ciclo quinzenal usando teto de tolerância operacional.
 // Retorna valor sem cap — pode ultrapassar 10 quando cruza o limite tolerável.
 function idoFromCiclo(
@@ -761,25 +774,25 @@ export default function DesempenhoPage() {
 
             {/* Grade: faltas + atrasos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 mt-4">
-              <ChartCard title="Faltas por obra">
+              <ChartCard title="Faltas por obra (tempo equivalente)">
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={buildSerieAg('faltas', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v, _, p) => [`${v} faltas`, p.name]} />
+                    <YAxis tickFormatter={v => fmtFaltas(Number(v))} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={(v, _, p) => [`${v} falta${Number(v) !== 1 ? 's' : ''} · ${fmtFaltas(Number(v))}`, p.name]} />
                     <LinhasObras />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Atrasos por obra (minutos)">
+              <ChartCard title="Atrasos por obra">
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={buildSerieAg('atrasos_minutos', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={v => `${v}m`} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v, _, p) => [`${v} min`, p.name]} />
+                    <YAxis tickFormatter={v => fmtTempo(Number(v))} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={(v, _, p) => [fmtTempo(Number(v)), p.name]} />
                     <LinhasObras />
                   </LineChart>
                 </ResponsiveContainer>

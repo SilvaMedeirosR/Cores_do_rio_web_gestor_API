@@ -10,7 +10,9 @@ export function mesLabel(ym: string) {
   return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
 }
 
-export const IDO_BRL_PT = 14.74; // R$ por ponto (R$7,37 = 0,5pt ⇒ 1pt = R$14,74)
+export const IDO_BRL_PT  = 14.74; // R$ por ponto (R$7,37 = 0,5pt ⇒ 1pt = R$14,74)
+export const IDO_ABS_PCT = 0.10;  // 10% de absenteísmo = teto tolerável de tempo
+export const IDO_MAT_PCT = 0.15;  // 15% de material excedente = teto tolerável de material
 
 export const OBRA_CORES: Record<string, string> = {
   'obra-001': '#ef4444',

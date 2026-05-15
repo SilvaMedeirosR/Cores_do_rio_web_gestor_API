@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import {
   fmt, fmtK, mesLabel, corObra,
-  IDO_BRL_PT,
+  IDO_BRL_PT, IDO_ABS_PCT, IDO_MAT_PCT,
   SectionTitle, ChartCard, TOOLTIP_STYLE,
   type Analytics, type MesSerie, type ObraMetrica,
   type ObraCiclos, type RelatorioObras,
@@ -22,51 +22,58 @@ const API_PESS = process.env.NEXT_PUBLIC_API_DEP_PESS ?? "";
 
 const IDO_H_DIA = 8; // horas úteis por dia
 
-// Computa IDO para um conjunto de ciclos quinzenais agregados.
-// orcTotal  = orcamento_total da obra (teto de material para todo o projeto).
-// totalQ    = total de quinzenais da obra na janela de 24 meses (para pro-ratear o orçamento).
-function idoFromCiclos(
-  ciclos: { faltas: number; atrasos_minutos: number; material_excedente_valor: number }[],
-  nFuncionarios: number,
-  horasMensais: number,
-  orcTotal: number,
-  totalQ: number,
+// IDO de um único ciclo quinzenal usando teto de tolerância operacional.
+// Retorna valor sem cap — pode ultrapassar 10 quando cruza o limite tolerável.
+function idoFromCiclo(
+  faltas: number, atMin: number, matExc: number,
+  nFuncionarios: number, horasMensais: number,
+  orcTotal: number, totalQ: number,
 ): number {
-  if (!ciclos.length || totalQ === 0) return 0;
-  const M        = ciclos.length;
-  const sumFalt  = ciclos.reduce((s, c) => s + c.faltas, 0);
-  const sumAtMin = ciclos.reduce((s, c) => s + c.atrasos_minutos, 0);
-  const sumMat   = ciclos.reduce((s, c) => s + c.material_excedente_valor, 0);
+  const horasQ      = horasMensais / 2;
+  const totalHorasQ = nFuncionarios * horasQ;
+  const orcQ        = totalQ > 0 ? orcTotal / totalQ : 0;
 
-  // Pontos reais
-  const Pt     = (sumAtMin / 60 + sumFalt * IDO_H_DIA) * 0.5;
-  const Pm     = sumMat / IDO_BRL_PT;
-  const Ptotal = Pt + Pm;
+  const Pt         = (atMin / 60 + faltas * IDO_H_DIA) * 0.5;
+  const Pm         = matExc / IDO_BRL_PT;
+  const Ptotal     = Pt + Pm;
 
-  // Pmax (teto inalcançável proporcional ao número de ciclos no período)
-  const horasQ    = horasMensais / 2;                         // h/trabalhador/quinzenal
-  const tetoTempo = nFuncionarios * horasQ * 0.5 * M;
-  const tetoMat   = (orcTotal / totalQ) * M / IDO_BRL_PT;
-  const Pmax      = tetoTempo + tetoMat;
+  // P_threshold = teto de tolerância operacional (10% absenteísmo + 15% material)
+  const tetoTempo  = totalHorasQ * IDO_ABS_PCT * 0.5;
+  const tetoMat    = orcQ * IDO_MAT_PCT / IDO_BRL_PT;
+  const Pthreshold = tetoTempo + tetoMat;
 
-  if (Pmax <= 0) return 0;
-  return parseFloat(Math.min((Ptotal / Pmax) * 10, 10).toFixed(2));
+  if (Pthreshold <= 0) return 0;
+  return parseFloat(((Ptotal / Pthreshold) * 10).toFixed(2));
+}
+
+// Média harmônica de (10 - IDO_i) por quinzenal, convertida de volta ao espaço do IDO.
+// Penaliza picos de desperdício: uma quinzena ruim "puxa" o agregado para cima.
+// Suporta overflow (IDO > 10): cada unidade acima de 10 é somada proporcionalmente.
+function idoHarmonico(idos: number[]): number {
+  if (!idos.length) return 0;
+  const overflows = idos.map(v => Math.max(v - 10, 0));
+  const avgOverflow = overflows.reduce((s, v) => s + v, 0) / idos.length;
+  const perfs = idos.map(v => Math.max(10 - v, 0.001));
+  const hPerf = perfs.length / perfs.reduce((s, p) => s + 1 / p, 0);
+  return parseFloat((10 - hPerf + avgOverflow).toFixed(2));
 }
 
 function idoColor(v: number): { bg: string; border: string; txt: string; label: string } {
-  if (v < 2)   return { bg: 'bg-emerald-50', border: 'border-emerald-200', txt: 'text-emerald-700', label: 'Excelente'  };
-  if (v < 4)   return { bg: 'bg-green-50',   border: 'border-green-200',   txt: 'text-green-700',   label: 'Bom'        };
-  if (v < 6)   return { bg: 'bg-amber-50',   border: 'border-amber-200',   txt: 'text-amber-700',   label: 'Atenção'    };
-  if (v < 8)   return { bg: 'bg-red-50',     border: 'border-red-200',     txt: 'text-red-700',     label: 'Crítico'    };
-  return       { bg: 'bg-red-100',   border: 'border-red-400',   txt: 'text-red-800',   label: 'Catástrofe' };
+  if (v < 2)   return { bg: 'bg-emerald-50', border: 'border-emerald-200', txt: 'text-emerald-700', label: 'Excelente'   };
+  if (v < 4)   return { bg: 'bg-green-50',   border: 'border-green-200',   txt: 'text-green-700',   label: 'Bom'         };
+  if (v < 6)   return { bg: 'bg-amber-50',   border: 'border-amber-200',   txt: 'text-amber-700',   label: 'Atenção'     };
+  if (v < 8)   return { bg: 'bg-red-50',     border: 'border-red-200',     txt: 'text-red-700',     label: 'Crítico'     };
+  if (v <= 10) return { bg: 'bg-red-100',    border: 'border-red-400',     txt: 'text-red-800',     label: 'Catástrofe'  };
+  return       { bg: 'bg-red-950',   border: 'border-red-600',   txt: 'text-red-200',   label: '⚠ Limite Ultrapassado' };
 }
 
 function idoBarColor(v: number): string {
-  if (v < 2) return '#10b981';
-  if (v < 4) return '#22c55e';
-  if (v < 6) return '#f59e0b';
-  if (v < 8) return '#ef4444';
-  return '#991b1b';
+  if (v < 2)   return '#10b981';
+  if (v < 4)   return '#22c55e';
+  if (v < 6)   return '#f59e0b';
+  if (v < 8)   return '#ef4444';
+  if (v <= 10) return '#991b1b';
+  return '#450a0a';
 }
 
 export default function DesempenhoPage() {
@@ -136,7 +143,7 @@ export default function DesempenhoPage() {
             const indice  = cs.reduce((s, c) => s + c.indice, 0) / cs.length;
             const hEsp    = o.n_funcionarios * o.horas_mensais * 12;
             const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
-            const ido     = idoFromCiclos(cs, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos);
+            const ido     = idoHarmonico(cs.map(c => idoFromCiclo(c.faltas, c.atrasos_minutos, c.material_excedente_valor, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos)));
             return {
               periodo: ano, label: ano, faltas, atrasos_minutos: atMin,
               material_excedente_valor: parseFloat(mat.toFixed(2)),
@@ -185,7 +192,7 @@ export default function DesempenhoPage() {
             const indice  = cs.reduce((a, c) => a + c.indice, 0) / cs.length;
             const hEsp    = o.n_funcionarios * o.horas_mensais * 6;
             const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
-            const ido     = idoFromCiclos(cs, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos);
+            const ido     = idoHarmonico(cs.map(c => idoFromCiclo(c.faltas, c.atrasos_minutos, c.material_excedente_valor, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos)));
             const lbl     = `S${s}/${String(y).slice(2)}`;
             return {
               periodo: k, label: lbl, faltas, atrasos_minutos: atMin,
@@ -236,7 +243,7 @@ export default function DesempenhoPage() {
             ...c,
             horas_esperadas:    o.n_funcionarios * o.horas_mensais,
             pct_horas_perdidas: 0,
-            ido: idoFromCiclos([c], o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos),
+            ido: idoFromCiclo(c.faltas, c.atrasos_minutos, c.material_excedente_valor, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos),
           })) as CicloAgregado[],
         };
       }),
@@ -431,15 +438,24 @@ export default function DesempenhoPage() {
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: corObra(o.obra_id, i) }} />
                       <p className="text-xs font-semibold text-zinc-700 truncate">{o.obra_nome}</p>
                     </div>
-                    <p className={`text-3xl font-bold tabular-nums ${txt}`}>{ido.toFixed(2)}</p>
+                    <p className={`text-3xl font-bold tabular-nums ${txt}`}>
+                      {ido.toFixed(2)}
+                      {ido > 10 && <span className="text-xs font-semibold ml-1 align-middle animate-pulse">↑</span>}
+                    </p>
                     <p className="text-xs text-zinc-500 mt-0.5">{lastCiclo?.label ?? '—'} · IDO</p>
-                    <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                    {/* Barra: 10 = 100%. Se overflow, barra cheia + marcador extra */}
+                    <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden relative">
                       <div
                         className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${ido * 10}%`, background: idoBarColor(ido) }}
+                        style={{ width: `${Math.min(ido / 10 * 100, 100)}%`, background: idoBarColor(ido) }}
                       />
                     </div>
-                    <p className={`text-xs font-semibold mt-1.5 ${txt}`}>{label}</p>
+                    {ido > 10 && (
+                      <p className="text-xs font-bold mt-1 tabular-nums text-red-300">
+                        +{(ido - 10).toFixed(2)} acima do limite
+                      </p>
+                    )}
+                    <p className={`text-xs font-semibold ${ido > 10 ? 'mt-0.5' : 'mt-1.5'} ${txt}`}>{label}</p>
                   </div>
                 );
               })}
@@ -449,11 +465,12 @@ export default function DesempenhoPage() {
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">IDO · Escala</p>
                 <div className="space-y-1 text-xs">
                   {[
-                    { range: '0,0 – 1,5', cor: 'bg-emerald-500', txt: 'text-emerald-700', label: 'Excelente'  },
-                    { range: '1,5 – 3,0', cor: 'bg-green-500',   txt: 'text-green-700',   label: 'Bom'        },
-                    { range: '3,0 – 5,0', cor: 'bg-amber-500',   txt: 'text-amber-700',   label: 'Atenção'    },
-                    { range: '5,0 – 7,0', cor: 'bg-red-500',     txt: 'text-red-700',     label: 'Crítico'    },
-                    { range: '7,0 – 10', cor: 'bg-red-800',     txt: 'text-red-800',     label: 'Catástrofe' },
+                    { range: '0,0 – 2,0', cor: 'bg-emerald-500', txt: 'text-emerald-700', label: 'Excelente'    },
+                    { range: '2,0 – 4,0', cor: 'bg-green-500',   txt: 'text-green-700',   label: 'Bom'          },
+                    { range: '4,0 – 6,0', cor: 'bg-amber-500',   txt: 'text-amber-700',   label: 'Atenção'      },
+                    { range: '6,0 – 8,0', cor: 'bg-red-500',     txt: 'text-red-700',     label: 'Crítico'      },
+                    { range: '8,0 – 10', cor: 'bg-red-800',     txt: 'text-red-800',     label: 'Catástrofe'  },
+                    { range: '> 10',     cor: 'bg-red-950',     txt: 'text-red-200',     label: '⚠ Ultrapassa' },
                   ].map(r => (
                     <div key={r.range} className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${r.cor}`} />
@@ -712,23 +729,33 @@ export default function DesempenhoPage() {
             })()}
 
             {/* ── IDO — Índice de Desperdício Operacional ── */}
-            <ChartCard title="IDO — Índice de Desperdício Operacional por obra (0 = perfeição · 5 = crítico · 10 = catástrofe)">
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={buildSerieAg('ido', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+            <ChartCard title="IDO — Índice de Desperdício Operacional · média harmônica por período · escala aberta (10 = limite de tolerância)">
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={buildSerieAg('ido', d)} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0, 10]} ticks={[0, 2.5, 5, 7.5, 10]} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                  <ReferenceLine y={5} stroke="#f97316" strokeDasharray="5 3" label={{ value: "crítico", position: "insideTopRight", fontSize: 9, fill: "#f97316" }} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "#a1a1aa" }}
+                    axisLine={false} tickLine={false}
+                    tickFormatter={v => v.toFixed(0)}
+                    domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax * 1.15), 12)]}
+                  />
+                  <ReferenceLine y={5}  stroke="#f97316" strokeDasharray="5 3" label={{ value: "crítico",  position: "insideTopRight", fontSize: 9, fill: "#f97316" }} />
+                  <ReferenceLine y={10} stroke="#dc2626" strokeDasharray="3 2" label={{ value: "limite",   position: "insideTopRight", fontSize: 9, fill: "#dc2626" }} />
                   <Tooltip
                     {...TOOLTIP_STYLE}
-                    formatter={(v, _, p) => [Number(v).toFixed(2) + ' pts', p.name]}
+                    formatter={(v, _, p) => {
+                      const val = Number(v);
+                      const suffix = val > 10 ? ` ⚠ +${(val - 10).toFixed(2)} acima` : '';
+                      return [val.toFixed(2) + suffix, p.name];
+                    }}
                   />
                   <Legend formatter={v => obras_r.find(o => o.obra_id === v)?.encarregado.nome ?? v} wrapperStyle={{ fontSize: 12 }} />
                   <LinhasObras />
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-xs text-zinc-400 mt-2">
-                IDO = (Pt + Pm) / Pmax × 10 · Pt = (h_atraso + h_faltas) × 0,5 · Pm = mat_excedente / R$14,74 · Pmax = teto do período
+                P_threshold: 10% absenteísmo + 15% material excedente · Agregado via média harmônica de (10 − IDO_quinzenal) · valores acima de 10 indicam ultrapassagem do limite tolerável
               </p>
             </ChartCard>
 

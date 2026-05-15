@@ -9,8 +9,9 @@ import {
 } from "recharts";
 import {
   fmt, fmtK, mesLabel, corObra,
+  IDO_BRL_PT,
   SectionTitle, ChartCard, TOOLTIP_STYLE,
-  type Analytics, type MesSerie,
+  type Analytics, type MesSerie, type ObraMetrica,
   type ObraCiclos, type RelatorioObras,
   type ObraAgregada, type CicloAgregado,
   type DeltaTransicao, type Nivel,
@@ -19,9 +20,59 @@ import {
 const API      = process.env.NEXT_PUBLIC_API_METRICAS ?? "";
 const API_PESS = process.env.NEXT_PUBLIC_API_DEP_PESS ?? "";
 
+const IDO_H_DIA = 8; // horas úteis por dia
+
+// Computa IDO para um conjunto de ciclos quinzenais agregados.
+// orcTotal  = orcamento_total da obra (teto de material para todo o projeto).
+// totalQ    = total de quinzenais da obra na janela de 24 meses (para pro-ratear o orçamento).
+function idoFromCiclos(
+  ciclos: { faltas: number; atrasos_minutos: number; material_excedente_valor: number }[],
+  nFuncionarios: number,
+  horasMensais: number,
+  orcTotal: number,
+  totalQ: number,
+): number {
+  if (!ciclos.length || totalQ === 0) return 0;
+  const M        = ciclos.length;
+  const sumFalt  = ciclos.reduce((s, c) => s + c.faltas, 0);
+  const sumAtMin = ciclos.reduce((s, c) => s + c.atrasos_minutos, 0);
+  const sumMat   = ciclos.reduce((s, c) => s + c.material_excedente_valor, 0);
+
+  // Pontos reais
+  const Pt     = (sumAtMin / 60 + sumFalt * IDO_H_DIA) * 0.5;
+  const Pm     = sumMat / IDO_BRL_PT;
+  const Ptotal = Pt + Pm;
+
+  // Pmax (teto inalcançável proporcional ao número de ciclos no período)
+  const horasQ    = horasMensais / 2;                         // h/trabalhador/quinzenal
+  const tetoTempo = nFuncionarios * horasQ * 0.5 * M;
+  const tetoMat   = (orcTotal / totalQ) * M / IDO_BRL_PT;
+  const Pmax      = tetoTempo + tetoMat;
+
+  if (Pmax <= 0) return 0;
+  return parseFloat(Math.min((Ptotal / Pmax) * 10, 10).toFixed(2));
+}
+
+function idoColor(v: number): { bg: string; border: string; txt: string; label: string } {
+  if (v < 2)   return { bg: 'bg-emerald-50', border: 'border-emerald-200', txt: 'text-emerald-700', label: 'Excelente'  };
+  if (v < 4)   return { bg: 'bg-green-50',   border: 'border-green-200',   txt: 'text-green-700',   label: 'Bom'        };
+  if (v < 6)   return { bg: 'bg-amber-50',   border: 'border-amber-200',   txt: 'text-amber-700',   label: 'Atenção'    };
+  if (v < 8)   return { bg: 'bg-red-50',     border: 'border-red-200',     txt: 'text-red-700',     label: 'Crítico'    };
+  return       { bg: 'bg-red-100',   border: 'border-red-400',   txt: 'text-red-800',   label: 'Catástrofe' };
+}
+
+function idoBarColor(v: number): string {
+  if (v < 2) return '#10b981';
+  if (v < 4) return '#22c55e';
+  if (v < 6) return '#f59e0b';
+  if (v < 8) return '#ef4444';
+  return '#991b1b';
+}
+
 export default function DesempenhoPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioObras | null>(null);
+  const [obrasMap,  setObrasMap]  = useState<Record<string, number>>({});
   const [mesesSel,  setMesesSel]  = useState(3);
   const [nivel,     setNivel]     = useState<Nivel>('anual');
   const [anoSel,    setAnoSel]    = useState<number | null>(null);
@@ -34,10 +85,14 @@ export default function DesempenhoPage() {
     Promise.all([
       fetch(`${API}/analytics`).then(r => r.json()).catch(() => ({ data: null })),
       fetch(`${API_PESS}/pontotel/relatorios/obras?meses=24`).then(r => r.json()).catch(() => ({ data: null })),
+      fetch(`${API}/obras`).then(r => r.json()).catch(() => ({ data: [] })),
     ])
-      .then(([a, p]) => {
+      .then(([a, p, o]) => {
         setAnalytics(a.data ?? null);
         setRelatorio(p.data ?? null);
+        const map: Record<string, number> = {};
+        (o.data ?? []).forEach((obra: ObraMetrica) => { map[obra.id] = obra.orcamento_total; });
+        setObrasMap(map);
       })
       .catch(() => setErro("Erro ao carregar dados de desempenho."))
       .finally(() => setLoading(false));
@@ -66,29 +121,35 @@ export default function DesempenhoPage() {
     const anos = [...new Set(src.flatMap(o => o.ciclos.map(c => c.mes_ano.slice(0, 4))))].sort();
     return {
       labels: anos.map(a => ({ periodo: a, label: a })),
-      obras: src.map(o => ({
-        obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
-        ciclos: anos.map(ano => {
-          const cs = o.ciclos.filter(c => c.mes_ano.startsWith(ano));
-          if (!cs.length) return null;
-          const faltas  = cs.reduce((s, c) => s + c.faltas, 0);
-          const atMin   = cs.reduce((s, c) => s + c.atrasos_minutos, 0);
-          const mat     = cs.reduce((s, c) => s + c.material_excedente_valor, 0);
-          const custo   = cs.reduce((s, c) => s + c.custo_perdido_pessoal, 0);
-          const indice  = cs.reduce((s, c) => s + c.indice, 0) / cs.length;
-          const hEsp    = o.n_funcionarios * o.horas_mensais * 12;
-          const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
-          return {
-            periodo: ano, label: ano, faltas, atrasos_minutos: atMin,
-            material_excedente_valor: parseFloat(mat.toFixed(2)),
-            custo_perdido_pessoal:    parseFloat(custo.toFixed(2)),
-            indice:                   parseFloat(indice.toFixed(2)),
-            prejuizo_total:           parseFloat((custo + mat).toFixed(2)),
-            horas_esperadas:          hEsp,
-            pct_horas_perdidas:       parseFloat(pct.toFixed(2)),
-          } as CicloAgregado;
-        }).filter(Boolean) as CicloAgregado[],
-      })),
+      obras: src.map(o => {
+        const orcTotal    = obrasMap[o.obra_id] ?? 0;
+        const totalCiclos = o.ciclos.length;
+        return {
+          obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
+          ciclos: anos.map(ano => {
+            const cs = o.ciclos.filter(c => c.mes_ano.startsWith(ano));
+            if (!cs.length) return null;
+            const faltas  = cs.reduce((s, c) => s + c.faltas, 0);
+            const atMin   = cs.reduce((s, c) => s + c.atrasos_minutos, 0);
+            const mat     = cs.reduce((s, c) => s + c.material_excedente_valor, 0);
+            const custo   = cs.reduce((s, c) => s + c.custo_perdido_pessoal, 0);
+            const indice  = cs.reduce((s, c) => s + c.indice, 0) / cs.length;
+            const hEsp    = o.n_funcionarios * o.horas_mensais * 12;
+            const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
+            const ido     = idoFromCiclos(cs, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos);
+            return {
+              periodo: ano, label: ano, faltas, atrasos_minutos: atMin,
+              material_excedente_valor: parseFloat(mat.toFixed(2)),
+              custo_perdido_pessoal:    parseFloat(custo.toFixed(2)),
+              indice:                   parseFloat(indice.toFixed(2)),
+              prejuizo_total:           parseFloat((custo + mat).toFixed(2)),
+              horas_esperadas:          hEsp,
+              pct_horas_perdidas:       parseFloat(pct.toFixed(2)),
+              ido,
+            } as CicloAgregado;
+          }).filter(Boolean) as CicloAgregado[],
+        };
+      }),
     };
   }
 
@@ -104,35 +165,41 @@ export default function DesempenhoPage() {
         const [y, s] = k.split('-S').map(Number);
         return { periodo: k, label: `S${s}/${String(y).slice(2)}` };
       }),
-      obras: src.map(o => ({
-        obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
-        ciclos: semKeys.map(k => {
-          const [y, s] = k.split('-S').map(Number);
-          const mSet   = s === 1 ? [1,2,3,4,5,6] : [7,8,9,10,11,12];
-          const cs     = o.ciclos.filter(c => {
-            const [cy, cm] = c.mes_ano.split('-').map(Number);
-            return cy === y && mSet.includes(cm);
-          });
-          if (!cs.length) return null;
-          const faltas  = cs.reduce((a, c) => a + c.faltas, 0);
-          const atMin   = cs.reduce((a, c) => a + c.atrasos_minutos, 0);
-          const mat     = cs.reduce((a, c) => a + c.material_excedente_valor, 0);
-          const custo   = cs.reduce((a, c) => a + c.custo_perdido_pessoal, 0);
-          const indice  = cs.reduce((a, c) => a + c.indice, 0) / cs.length;
-          const hEsp    = o.n_funcionarios * o.horas_mensais * 6;
-          const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
-          const lbl     = `S${s}/${String(y).slice(2)}`;
-          return {
-            periodo: k, label: lbl, faltas, atrasos_minutos: atMin,
-            material_excedente_valor: parseFloat(mat.toFixed(2)),
-            custo_perdido_pessoal:    parseFloat(custo.toFixed(2)),
-            indice:                   parseFloat(indice.toFixed(2)),
-            prejuizo_total:           parseFloat((custo + mat).toFixed(2)),
-            horas_esperadas:          hEsp,
-            pct_horas_perdidas:       parseFloat(pct.toFixed(2)),
-          } as CicloAgregado;
-        }).filter(Boolean) as CicloAgregado[],
-      })),
+      obras: src.map(o => {
+        const orcTotal    = obrasMap[o.obra_id] ?? 0;
+        const totalCiclos = o.ciclos.length;
+        return {
+          obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
+          ciclos: semKeys.map(k => {
+            const [y, s] = k.split('-S').map(Number);
+            const mSet   = s === 1 ? [1,2,3,4,5,6] : [7,8,9,10,11,12];
+            const cs     = o.ciclos.filter(c => {
+              const [cy, cm] = c.mes_ano.split('-').map(Number);
+              return cy === y && mSet.includes(cm);
+            });
+            if (!cs.length) return null;
+            const faltas  = cs.reduce((a, c) => a + c.faltas, 0);
+            const atMin   = cs.reduce((a, c) => a + c.atrasos_minutos, 0);
+            const mat     = cs.reduce((a, c) => a + c.material_excedente_valor, 0);
+            const custo   = cs.reduce((a, c) => a + c.custo_perdido_pessoal, 0);
+            const indice  = cs.reduce((a, c) => a + c.indice, 0) / cs.length;
+            const hEsp    = o.n_funcionarios * o.horas_mensais * 6;
+            const pct     = hEsp > 0 ? (faltas * 480 + atMin) / (hEsp * 60) * 100 : 0;
+            const ido     = idoFromCiclos(cs, o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos);
+            const lbl     = `S${s}/${String(y).slice(2)}`;
+            return {
+              periodo: k, label: lbl, faltas, atrasos_minutos: atMin,
+              material_excedente_valor: parseFloat(mat.toFixed(2)),
+              custo_perdido_pessoal:    parseFloat(custo.toFixed(2)),
+              indice:                   parseFloat(indice.toFixed(2)),
+              prejuizo_total:           parseFloat((custo + mat).toFixed(2)),
+              horas_esperadas:          hEsp,
+              pct_horas_perdidas:       parseFloat(pct.toFixed(2)),
+              ido,
+            } as CicloAgregado;
+          }).filter(Boolean) as CicloAgregado[],
+        };
+      }),
     };
   }
 
@@ -160,14 +227,19 @@ export default function DesempenhoPage() {
       .sort((a, b) => a.periodo.localeCompare(b.periodo));
     return {
       labels,
-      obras: cortadas.map(o => ({
-        obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
-        ciclos: o.ciclos.map(c => ({
-          ...c,
-          horas_esperadas:    o.n_funcionarios * o.horas_mensais,
-          pct_horas_perdidas: 0,
-        })),
-      })),
+      obras: cortadas.map(o => {
+        const orcTotal    = obrasMap[o.obra_id] ?? 0;
+        const totalCiclos = src.find(s => s.obra_id === o.obra_id)?.ciclos.length ?? o.ciclos.length;
+        return {
+          obra_id: o.obra_id, obra_nome: o.obra_nome, encarregado: o.encarregado,
+          ciclos: o.ciclos.map(c => ({
+            ...c,
+            horas_esperadas:    o.n_funcionarios * o.horas_mensais,
+            pct_horas_perdidas: 0,
+            ido: idoFromCiclos([c], o.n_funcionarios, o.horas_mensais, orcTotal, totalCiclos),
+          })) as CicloAgregado[],
+        };
+      }),
     };
   }
 
@@ -329,7 +401,7 @@ export default function DesempenhoPage() {
 
         return (
           <section>
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <SectionTitle>Pessoal por Obra · {nivelLabel}</SectionTitle>
 
               {nivel === 'quinzenal' && (
@@ -345,6 +417,52 @@ export default function DesempenhoPage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* ── IDO Scorecards ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
+              {obras_r.map((o, i) => {
+                const lastCiclo = o.ciclos[o.ciclos.length - 1];
+                const ido       = lastCiclo?.ido ?? 0;
+                const { bg, border, txt, label } = idoColor(ido);
+                return (
+                  <div key={o.obra_id} className={`rounded-xl border p-4 ${bg} ${border}`}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: corObra(o.obra_id, i) }} />
+                      <p className="text-xs font-semibold text-zinc-700 truncate">{o.obra_nome}</p>
+                    </div>
+                    <p className={`text-3xl font-bold tabular-nums ${txt}`}>{ido.toFixed(2)}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{lastCiclo?.label ?? '—'} · IDO</p>
+                    <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${ido * 10}%`, background: idoBarColor(ido) }}
+                      />
+                    </div>
+                    <p className={`text-xs font-semibold mt-1.5 ${txt}`}>{label}</p>
+                  </div>
+                );
+              })}
+
+              {/* Legenda de interpretação */}
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 col-span-2 sm:col-span-1">
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">IDO · Escala</p>
+                <div className="space-y-1 text-xs">
+                  {[
+                    { range: '0,0 – 1,5', cor: 'bg-emerald-500', txt: 'text-emerald-700', label: 'Excelente'  },
+                    { range: '1,5 – 3,0', cor: 'bg-green-500',   txt: 'text-green-700',   label: 'Bom'        },
+                    { range: '3,0 – 5,0', cor: 'bg-amber-500',   txt: 'text-amber-700',   label: 'Atenção'    },
+                    { range: '5,0 – 7,0', cor: 'bg-red-500',     txt: 'text-red-700',     label: 'Crítico'    },
+                    { range: '7,0 – 10', cor: 'bg-red-800',     txt: 'text-red-800',     label: 'Catástrofe' },
+                  ].map(r => (
+                    <div key={r.range} className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${r.cor}`} />
+                      <span className="text-zinc-400 tabular-nums w-16">{r.range}</span>
+                      <span className={`font-semibold ${r.txt}`}>{r.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Breadcrumb */}
@@ -593,8 +711,29 @@ export default function DesempenhoPage() {
               );
             })()}
 
+            {/* ── IDO — Índice de Desperdício Operacional ── */}
+            <ChartCard title="IDO — Índice de Desperdício Operacional por obra (0 = perfeição · 5 = crítico · 10 = catástrofe)">
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={buildSerieAg('ido', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 10]} ticks={[0, 2.5, 5, 7.5, 10]} tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
+                  <ReferenceLine y={5} stroke="#f97316" strokeDasharray="5 3" label={{ value: "crítico", position: "insideTopRight", fontSize: 9, fill: "#f97316" }} />
+                  <Tooltip
+                    {...TOOLTIP_STYLE}
+                    formatter={(v, _, p) => [Number(v).toFixed(2) + ' pts', p.name]}
+                  />
+                  <Legend formatter={v => obras_r.find(o => o.obra_id === v)?.encarregado.nome ?? v} wrapperStyle={{ fontSize: 12 }} />
+                  <LinhasObras />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-zinc-400 mt-2">
+                IDO = (Pt + Pm) / Pmax × 10 · Pt = (h_atraso + h_faltas) × 0,5 · Pm = mat_excedente / R$14,74 · Pmax = teto do período
+              </p>
+            </ChartCard>
+
             {/* Grade: faltas + atrasos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 mt-4">
               <ChartCard title="Faltas por obra">
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={buildSerieAg('faltas', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
@@ -619,18 +758,6 @@ export default function DesempenhoPage() {
                 </ResponsiveContainer>
               </ChartCard>
             </div>
-
-            <ChartCard title="Índice de irregularidade · (min÷10×0,5) + (faltas×4) · média por obra">
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={buildSerieAg('indice', d)} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v, _, p) => [Number(v).toFixed(2), p.name]} />
-                  <LinhasObras />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
 
             {nivel !== 'quinzenal' && (
               <ChartCard title="% horas perdidas sobre horas esperadas do período">

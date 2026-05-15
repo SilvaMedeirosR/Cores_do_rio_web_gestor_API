@@ -10,6 +10,8 @@ export function mesLabel(ym: string) {
   return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
 }
 
+export const IDO_BRL_PT = 14.74; // R$ por ponto (R$7,37 = 0,5pt ⇒ 1pt = R$14,74)
+
 export const OBRA_CORES: Record<string, string> = {
   'obra-001': '#ef4444',
   'obra-002': '#3b82f6',
@@ -91,6 +93,7 @@ export interface CicloAgregado {
   prejuizo_total:           number;
   horas_esperadas:          number;
   pct_horas_perdidas:       number;
+  ido:                      number;
 }
 
 export interface ObraAgregada {

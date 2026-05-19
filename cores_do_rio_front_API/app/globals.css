@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --header-h:      56px;
+  /* ── Layout ── */
+  --header-h:      92px;   /* 56px main bar + 36px mobile nav strip */
+  --header-bar:    56px;
+
+  /* ── Palette ── */
   --cr-navy:       #1A2A3A;
   --cr-cream:      #F3ECE0;
   --cr-navy-06:    rgba(26,42,58,0.06);
@@ -9,10 +13,53 @@
   --cr-navy-14:    rgba(26,42,58,0.14);
   --cr-navy-30:    rgba(26,42,58,0.30);
   --cr-navy-45:    rgba(26,42,58,0.45);
+
+  /* ── Typography ── */
   --font-inter:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --fs-display:    clamp(2rem,   5vw, 3rem);
+  --fs-title:      clamp(1.75rem,4vw, 2.5rem);
+  --fs-heading:    clamp(1.375rem,3vw,1.875rem);
+  --fs-subhead:    clamp(1.125rem,2.5vw,1.375rem);
+  --fs-body:       1rem;
+  --fs-small:      0.875rem;
+  --fs-caption:    0.8rem;
+  --fs-micro:      0.7rem;
+
+  /* ── Spacing scale ── */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ── Semantic spacing ── */
+  --card-p:      clamp(1rem,   3vw, 1.5rem);
+  --section-gap: clamp(1.5rem, 4vw, 2.5rem);
+
+  /* ── Radii ── */
   --radius-box:    14px;
   --radius-card:   12px;
   --radius-input:  8px;
+}
+
+/* Desktop: only main bar counts */
+@media (min-width: 768px) {
+  :root { --header-h: 56px; }
+}
+
+/* xs font scale reduction */
+@media (max-width: 479px) {
+  :root {
+    --fs-display: clamp(1.75rem, 7vw, 2.25rem);
+    --fs-title:   clamp(1.5rem,  6vw, 1.875rem);
+    --fs-heading: clamp(1.25rem, 5vw, 1.5rem);
+    --card-p:     0.875rem;
+    --section-gap: 1.25rem;
+  }
 }
 
 @theme inline {
@@ -191,6 +238,50 @@ input:focus, select:focus, textarea:focus {
 .text-red-700 { color: #dc2626 !important; }
 .border-red-200 { border-color: rgba(239,68,68,0.20) !important; }
 .hover\:bg-red-100:hover { background-color: rgba(239,68,68,0.12) !important; }
+
+/* ── Desktop: logo text sempre visível ─────────────────────────── */
+@media (min-width: 768px) {
+  .cr-logo-text {
+    max-width: 200px !important;
+    opacity:   1     !important;
+    overflow:  visible !important;
+  }
+}
+
+/* ── Mobile nav strip — esconde scrollbar ───────────────────────── */
+.cr-nav-strip::-webkit-scrollbar { display: none; }
+.cr-nav-strip { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ── Interatividade global ───────────────────────────────────────── */
+
+/* Hover lift + press para cards clicáveis */
+.cr-card-link {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.cr-card-link:hover  { transform: translateY(-2px); }
+.cr-card-link:active { transform: translateY(0) scale(0.985); transition-duration: 0.08s; }
+
+/* Press genérico para botões */
+.cr-press:active { transform: scale(0.95); transition: transform 0.08s ease; }
+
+/* Fade-out ao remover linha/card */
+@keyframes cr-remove {
+  from { opacity: 1; transform: scaleY(1);   max-height: 80px; }
+  to   { opacity: 0; transform: scaleY(0.8); max-height: 0;    }
+}
+.cr-removing {
+  animation: cr-remove 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Flash de confirmação (linha salva) */
+@keyframes cr-confirm {
+  0%   { background-color: rgba(16,185,129,0.12); }
+  70%  { background-color: rgba(16,185,129,0.06); }
+  100% { background-color: transparent; }
+}
+.cr-confirm { animation: cr-confirm 0.9s ease forwards; }
 
 /* ── Scrollbar sutil ────────────────────────────────────────────── */
 
@@ -442,10 +533,8 @@ body {
   }
 }
 
-/* ── md: sm do Tailwind (640–767px) ─────────────────────────────── */
+/* ── sm: Tailwind sm (< 640px) ───────────────────────────────────── */
 @media (max-width: 639px) {
-  h1 { font-size: clamp(1.6rem, 6vw, 2.25rem) !important; }
-
   .p-6  { padding: 1rem !important; }
   .p-5  { padding: 0.875rem !important; }
   .px-6 { padding-left: 1rem !important; padding-right: 1rem !important; }

@@ -26,7 +26,7 @@ export default function MetricasLayout({ children }: { children: React.ReactNode
                   href={tab.href}
                   className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     active
-                      ? "border-orange-500 text-orange-600"
+                      ? "border-[#1A2A3A] text-[#1A2A3A]"
                       : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300"
                   }`}
                 >

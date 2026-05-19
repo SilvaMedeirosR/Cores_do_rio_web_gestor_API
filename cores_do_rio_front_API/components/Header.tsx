@@ -10,13 +10,13 @@ const FOLHA_API = process.env.NEXT_PUBLIC_API_FOLHA ?? "";
 interface Notificacao { id: string; titulo: string; corpo: string | null; tipo: string; lida: boolean; created_at: string; }
 
 const ALL_navItems = [
-  { label: "Métricas",     href: "/metricas"                   },
-  { label: "Orçamentos",   href: "/orcamentos"                 },
-  { label: "Compras",      href: "/compras"                    },
-  { label: "Dep. Pessoal", href: "/departamento-pessoal"       },
-  { label: "Folha / DP",   href: "/departamento-pessoal/folha" },
-  { label: "Financeiro",   href: "/financeiro"                 },
-  { label: "Folha / Fin.", href: "/financeiro/folha"           },
+  { label: "Métricas",     mobileLabel: "Métricas",   href: "/metricas"                   },
+  { label: "Orçamentos",   mobileLabel: "Orçam.",     href: "/orcamentos"                 },
+  { label: "Compras",      mobileLabel: "Compras",    href: "/compras"                    },
+  { label: "Dep. Pessoal", mobileLabel: "DP",         href: "/departamento-pessoal"       },
+  { label: "Folha / DP",   mobileLabel: "Folha DP",   href: "/departamento-pessoal/folha" },
+  { label: "Financeiro",   mobileLabel: "Financ.",    href: "/financeiro"                 },
+  { label: "Folha / Fin.", mobileLabel: "Folha Fin.", href: "/financeiro/folha"           },
 ];
 
 const FUNCAO_LABEL: Record<string, string> = {
@@ -53,18 +53,25 @@ export default function Header() {
   const pathname = usePathname();
   const router   = useRouter();
 
-  const [open,      setOpen]      = useState(false);
-  const [userOpen,  setUserOpen]  = useState(false);
-  const [profile,   setProfile]   = useState<Profile | null>(null);
-  const [userEmail, setUserEmail] = useState("");
-  const [funcao,    setFuncao]    = useState<Funcao | null>(null);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifs,    setNotifs]    = useState<Notificacao[]>([]);
+  const [userOpen,      setUserOpen]      = useState(false);
+  const [profile,       setProfile]       = useState<Profile | null>(null);
+  const [userEmail,     setUserEmail]     = useState("");
+  const [funcao,        setFuncao]        = useState<Funcao | null>(null);
+  const [notifOpen,     setNotifOpen]     = useState(false);
+  const [notifs,        setNotifs]        = useState<Notificacao[]>([]);
+  const [logoExpanded,  setLogoExpanded]  = useState(true);
 
   const userRef  = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const navItems = funcao ? ALL_navItems.filter(i => temAcesso(funcao, i.href)) : [];
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      const t = setTimeout(() => setLogoExpanded(false), 1600);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   useEffect(() => {
     const sb = createClient();
@@ -128,7 +135,6 @@ export default function Header() {
     ? `${profile.nome[0]}${profile.sobrenome[0]}`.toUpperCase()
     : userEmail[0]?.toUpperCase() ?? "?";
 
-  /* ─── Estilos inline (navy palette) ─── */
   const NAV = "#1A2A3A";
   const CRM = "#F3ECE0";
   const navLinkBase: React.CSSProperties = {
@@ -138,16 +144,23 @@ export default function Header() {
 
   return (
     <header style={{ backgroundColor: NAV, borderBottom: "1px solid rgba(243,236,224,0.08)", position: "sticky", top: 0, zIndex: 50 }}>
+      {/* Main bar */}
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(0.75rem, 3vw, 1.5rem)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "56px" }}>
 
           {/* Logo */}
-          <Link href="/" onClick={() => setOpen(false)}
+          <Link href="/"
             style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", flexShrink: 0 }}>
             <CRLogo size={22} />
-            <span style={{
+            <span className="cr-logo-text" style={{
               fontFamily: "var(--font-cormorant)", color: CRM,
               fontSize: "1rem", letterSpacing: "0.14em", textTransform: "uppercase",
+              maxWidth: logoExpanded ? "200px" : "0px",
+              opacity: logoExpanded ? 1 : 0,
+              overflow: "hidden",
+              transition: "max-width 0.55s cubic-bezier(0.4,0,0.2,1), opacity 0.4s ease",
+              whiteSpace: "nowrap",
+              display: "block",
             }}>
               Cores do Rio
             </span>
@@ -199,6 +212,7 @@ export default function Header() {
                       backgroundColor: "#e55", color: "#fff",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: "9px", fontWeight: 700, padding: "0 3px",
+                      animation: "anim-success-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
                     }}>
                       {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
@@ -225,7 +239,7 @@ export default function Header() {
                       {notifs.length === 0 ? (
                         <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.35)", textAlign: "center", padding: "32px 16px" }}>Sem notificações</p>
                       ) : notifs.map(n => (
-                        <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid rgba(26,42,58,0.04)", backgroundColor: !n.lida ? "rgba(26,42,58,0.03)" : "transparent" }}>
+                        <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid rgba(26,42,58,0.04)", backgroundColor: !n.lida ? "rgba(26,42,58,0.03)" : "transparent", transition: "background-color 0.3s ease" }}>
                           <p style={{ fontSize: "0.75rem", color: NAV, fontWeight: n.lida ? 400 : 600, lineHeight: 1.4 }}>{n.titulo}</p>
                           {n.corpo && <p style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.45)", marginTop: "2px" }}>{n.corpo}</p>}
                           <p style={{ fontSize: "0.62rem", color: "rgba(26,42,58,0.25)", marginTop: "4px" }}>{fmtTime(n.created_at)}</p>
@@ -313,55 +327,42 @@ export default function Header() {
                 </div>
               )}
             </div>
-
-            {/* Hambúrguer mobile */}
-            <button
-              className="md:hidden"
-              onClick={() => setOpen(v => !v)}
-              aria-label="Menu"
-              style={{
-                padding: "8px", borderRadius: "8px", border: "none",
-                backgroundColor: "transparent", color: "rgba(243,236,224,0.6)", cursor: "pointer",
-              }}
-            >
-              {open ? (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              ) : (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-                </svg>
-              )}
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Menu mobile */}
-      {open && (
-        <div style={{ borderTop: "1px solid rgba(243,236,224,0.08)", backgroundColor: NAV }} className="md:hidden">
-          <nav style={{ maxWidth: "1280px", margin: "0 auto", padding: "8px 24px", display: "flex", flexDirection: "column" }}>
-            {navItems.map(item => (
-              <Link key={item.href} href={item.href} onClick={() => setOpen(false)} style={{
-                padding: "10px 12px", borderRadius: "8px", textDecoration: "none",
-                fontSize: "0.85rem", transition: "all 0.15s",
-                color: isActive(item.href) ? CRM : "rgba(243,236,224,0.5)",
-                backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.08)" : "transparent",
-              }}>
-                {item.label}
-              </Link>
-            ))}
-            <button onClick={handleLogout} style={{
-              marginTop: "4px", padding: "10px 12px", borderRadius: "8px",
-              border: "none", background: "none", cursor: "pointer",
-              fontSize: "0.85rem", color: "#f87171", textAlign: "left",
+      {/* Mobile nav strip */}
+      <div className="cr-nav-strip md:hidden" style={{
+        borderTop: "1px solid rgba(243,236,224,0.07)",
+        backgroundColor: NAV,
+        height: "36px",
+        display: "flex",
+        alignItems: "center",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch" as never,
+      }}>
+        <div style={{ display: "flex", padding: "0 clamp(0.5rem,3vw,1.25rem)", gap: "2px", minWidth: "max-content", alignItems: "center", height: "100%" }}>
+          {navItems.map(item => (
+            <Link key={item.href} href={item.href} style={{
+              padding: "4px 9px",
+              fontSize: "0.72rem",
+              fontWeight: isActive(item.href) ? 600 : 400,
+              color: isActive(item.href) ? CRM : "rgba(243,236,224,0.52)",
+              backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.10)" : "transparent",
+              borderRadius: "5px",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              transition: "color 0.15s, background-color 0.15s",
+              letterSpacing: "0.02em",
+              display: "flex",
+              alignItems: "center",
+              height: "26px",
             }}>
-              Sair
-            </button>
-          </nav>
+              {item.mobileLabel}
+            </Link>
+          ))}
         </div>
-      )}
+      </div>
     </header>
   );
 }

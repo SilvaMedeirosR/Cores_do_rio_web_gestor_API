@@ -166,7 +166,7 @@ export default function Header() {
           </Link>
 
           {/* Desktop nav */}
-          <nav style={{ display: "flex", alignItems: "center", gap: "2px", flex: 1, marginLeft: "4px" }} className="hidden md:flex">
+          <nav style={{ alignItems: "center", gap: "2px", flex: 1, marginLeft: "4px" }} className="hidden md:flex">
             {navItems.map(item => (
               <Link key={item.href} href={item.href} style={{
                 ...navLinkBase,
@@ -183,7 +183,7 @@ export default function Header() {
           </nav>
 
           {/* Mobile nav — inline scrollable, same bar */}
-          <div className="cr-nav-strip md:hidden" style={{ flex: 1, display: "flex", alignItems: "center", overflowX: "auto", height: "100%" }}>
+          <div className="cr-nav-strip flex md:hidden" style={{ flex: 1, alignItems: "center", overflowX: "auto", height: "100%" }}>
             <div style={{ display: "flex", gap: "2px", alignItems: "center", minWidth: "max-content", padding: "0 2px" }}>
               {navItems.map(item => (
                 <Link key={item.href} href={item.href} style={{

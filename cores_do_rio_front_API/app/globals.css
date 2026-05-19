@@ -2,8 +2,7 @@
 
 :root {
   /* ── Layout ── */
-  --header-h:      92px;   /* 56px main bar + 36px mobile nav strip */
-  --header-bar:    56px;
+  --header-h:      56px;
 
   /* ── Palette ── */
   --cr-navy:       #1A2A3A;
@@ -46,10 +45,6 @@
   --radius-input:  8px;
 }
 
-/* Desktop: only main bar counts */
-@media (min-width: 768px) {
-  :root { --header-h: 56px; }
-}
 
 /* xs font scale reduction */
 @media (max-width: 479px) {

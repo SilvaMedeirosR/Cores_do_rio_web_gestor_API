@@ -144,9 +144,8 @@ export default function Header() {
 
   return (
     <header style={{ backgroundColor: NAV, borderBottom: "1px solid rgba(243,236,224,0.08)", position: "sticky", top: 0, zIndex: 50 }}>
-      {/* Main bar */}
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(0.75rem, 3vw, 1.5rem)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "56px" }}>
+        <div style={{ display: "flex", alignItems: "center", height: "56px", gap: "6px" }}>
 
           {/* Logo */}
           <Link href="/"
@@ -167,7 +166,7 @@ export default function Header() {
           </Link>
 
           {/* Desktop nav */}
-          <nav style={{ display: "flex", alignItems: "center", gap: "2px" }} className="hidden md:flex">
+          <nav style={{ display: "flex", alignItems: "center", gap: "2px", flex: 1, marginLeft: "4px" }} className="hidden md:flex">
             {navItems.map(item => (
               <Link key={item.href} href={item.href} style={{
                 ...navLinkBase,
@@ -183,7 +182,31 @@ export default function Header() {
             ))}
           </nav>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Mobile nav — inline scrollable, same bar */}
+          <div className="cr-nav-strip md:hidden" style={{ flex: 1, display: "flex", alignItems: "center", overflowX: "auto", height: "100%" }}>
+            <div style={{ display: "flex", gap: "2px", alignItems: "center", minWidth: "max-content", padding: "0 2px" }}>
+              {navItems.map(item => (
+                <Link key={item.href} href={item.href} style={{
+                  padding: "5px 9px",
+                  fontSize: "0.72rem",
+                  fontWeight: isActive(item.href) ? 600 : 400,
+                  color: isActive(item.href) ? CRM : "rgba(243,236,224,0.52)",
+                  backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.10)" : "transparent",
+                  borderRadius: "5px",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  transition: "color 0.15s, background-color 0.15s",
+                  letterSpacing: "0.02em",
+                  display: "flex",
+                  alignItems: "center",
+                }}>
+                  {item.mobileLabel}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
 
             {/* Notificações */}
             {userEmail && FOLHA_API && (
@@ -331,38 +354,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile nav strip */}
-      <div className="cr-nav-strip md:hidden" style={{
-        borderTop: "1px solid rgba(243,236,224,0.07)",
-        backgroundColor: NAV,
-        height: "36px",
-        display: "flex",
-        alignItems: "center",
-        overflowX: "auto",
-        WebkitOverflowScrolling: "touch" as never,
-      }}>
-        <div style={{ display: "flex", padding: "0 clamp(0.5rem,3vw,1.25rem)", gap: "2px", minWidth: "max-content", alignItems: "center", height: "100%" }}>
-          {navItems.map(item => (
-            <Link key={item.href} href={item.href} style={{
-              padding: "4px 9px",
-              fontSize: "0.72rem",
-              fontWeight: isActive(item.href) ? 600 : 400,
-              color: isActive(item.href) ? CRM : "rgba(243,236,224,0.52)",
-              backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.10)" : "transparent",
-              borderRadius: "5px",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-              transition: "color 0.15s, background-color 0.15s",
-              letterSpacing: "0.02em",
-              display: "flex",
-              alignItems: "center",
-              height: "26px",
-            }}>
-              {item.mobileLabel}
-            </Link>
-          ))}
-        </div>
-      </div>
     </header>
   );
 }
+

@@ -2,11 +2,12 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ChevronRight, Pencil, Trash2, Plus } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"];
-const ETAPA_LABELS: Record<string,string> = { massa_parede:"Massa Parede", massa_teto:"Massa Teto", lixacao:"Lixacao", pintura:"Pintura", acabamento:"Acabamento" };
-const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suite", varanda:"Varanda", lavatorio:"Lavatorio", circulacao:"Circulacao", corredor:"Corredor", escritorio:"Escritorio", area_tecnica:"Area Tecnica", escada:"Escada", casa_maquinas:"Casa de Maquinas", casa_exaustao:"Casa de Exaustao", estacionamento:"Estacionamento", garagem:"Garagem", deposito:"Deposito", area_lazer:"Area de Lazer" };
+const ETAPA_LABELS: Record<string,string> = { massa_parede:"Massa Parede", massa_teto:"Massa Teto", lixacao:"Lixação", pintura:"Pintura", acabamento:"Acabamento" };
+const TIPO_LABELS:  Record<string,string> = { sala:"Sala", quarto:"Quarto", banheiro:"Banheiro", suite:"Suíte", varanda:"Varanda", lavatorio:"Lavatório", circulacao:"Circulação", corredor:"Corredor", escritorio:"Escritório", area_tecnica:"Área Técnica", escada:"Escada", casa_maquinas:"Casa de Máquinas", casa_exaustao:"Casa de Exaustão", estacionamento:"Estacionamento", garagem:"Garagem", deposito:"Depósito", area_lazer:"Área de Lazer" };
 const TIPOS_COMODO = Object.entries(TIPO_LABELS).map(([value, label]) => ({ value, label }));
 
 const fmt  = (v: number) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
@@ -19,14 +20,18 @@ const BTN_SM   = "text-xs border border-zinc-200 hover:border-zinc-400 text-zinc
 type EtapaKey = "massa_parede"|"massa_teto"|"lixacao"|"pintura"|"acabamento";
 
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
-interface Comodo    { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; orcamento:OrcComodo; }
+interface ParedeData { m2:number; cor?:string|null; }
+interface TetoData   { m2:number; }
+interface Comodo    { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; paredes:ParedeData[]; tetos:TetoData[]; orcamento:OrcComodo; }
 interface AptTipo   { id:string; nome:string; }
 interface Apartamento { id:string; nome:string|null; numero:number|null; tipo_id:string|null; apartamento_tipos:AptTipo|null; comodos:Comodo[]; orcamento_total:number; }
 interface PavOutro  { id:string; nome:string; numero:number; }
 interface Pavimento { id:string; nome:string; numero:number; orcamento_total:number; comodos:Comodo[]; apartamentos:Apartamento[]; obras:{ id:string; nome:string; apartamento_tipos:AptTipo[]; pavimentos:PavOutro[] }; }
 
-interface ComodoForm { tipo:string; nome:string; parede1_m2:string; parede2_m2:string; parede3_m2:string; parede4_m2:string; teto_m2:string; }
-const emptyComodoForm = (): ComodoForm => ({ tipo:"sala", nome:"", parede1_m2:"", parede2_m2:"", parede3_m2:"", parede4_m2:"", teto_m2:"" });
+interface ParedeInput { m2:string; cor:string; }
+interface TetoInput   { m2:string; }
+interface ComodoForm { tipo:string; nome:string; paredes:ParedeInput[]; tetos:TetoInput[]; }
+const emptyComodoForm = (): ComodoForm => ({ tipo:"sala", nome:"", paredes:[{m2:"", cor:""}], tetos:[{m2:""}] });
 
 interface AptForm { nome:string; numero:string; tipo_id:string; }
 const emptyAptForm = (): AptForm => ({ nome:"", numero:"", tipo_id:"" });
@@ -137,7 +142,7 @@ export default function PavimentoDetailPage() {
       });
       if (!r.ok) { const j = await r.json(); setErroApt(j.error ?? "Erro"); return; }
       setAptForm(emptyAptForm()); setAddingApt(false); await fetchPav();
-    } catch { setErroApt("Erro de conexao"); } finally { setSubApt(false); }
+    } catch { setErroApt("Erro de conexão"); } finally { setSubApt(false); }
   };
 
   const startEditApt = (apt: Apartamento) => {
@@ -179,7 +184,7 @@ export default function PavimentoDetailPage() {
       if (!r.ok) { const j = await r.json(); setErroClone(j.error ?? "Erro"); return; }
       setClonando(false); setOrigemId(""); setManterMedidas(false);
       await fetchPav();
-    } catch { setErroClone("Erro de conexao"); } finally { setSubClone(false); }
+    } catch { setErroClone("Erro de conexão"); } finally { setSubClone(false); }
   };
 
   // ── Handler tipos ──────────────────────────────────────────────────────────
@@ -209,14 +214,13 @@ export default function PavimentoDetailPage() {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           tipo:newCom.tipo, nome:newCom.nome||null,
-          parede1_m2:n(newCom.parede1_m2), parede2_m2:n(newCom.parede2_m2),
-          parede3_m2:n(newCom.parede3_m2), parede4_m2:n(newCom.parede4_m2),
-          teto_m2:n(newCom.teto_m2),
+          paredes: newCom.paredes.map(p => ({ m2:n(p.m2), cor:p.cor||null })),
+          tetos:   newCom.tetos.map(t => ({ m2:n(t.m2) })),
         }),
       });
       if (!r.ok) { const j = await r.json(); setErroCom(j.error ?? "Erro"); return; }
       setNewCom(emptyComodoForm()); setAddingCom(false); await fetchPav();
-    } catch { setErroCom("Erro de conexao"); } finally { setSubCom(false); }
+    } catch { setErroCom("Erro de conexão"); } finally { setSubCom(false); }
   };
 
   const handleAddComApt = async (e: React.FormEvent, aptId: string) => {
@@ -226,14 +230,13 @@ export default function PavimentoDetailPage() {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           tipo:newComApt.tipo, nome:newComApt.nome||null,
-          parede1_m2:n(newComApt.parede1_m2), parede2_m2:n(newComApt.parede2_m2),
-          parede3_m2:n(newComApt.parede3_m2), parede4_m2:n(newComApt.parede4_m2),
-          teto_m2:n(newComApt.teto_m2),
+          paredes: newComApt.paredes.map(p => ({ m2:n(p.m2), cor:p.cor||null })),
+          tetos:   newComApt.tetos.map(t => ({ m2:n(t.m2) })),
         }),
       });
       if (!r.ok) { const j = await r.json(); setErroComApt(j.error ?? "Erro"); return; }
       setNewComApt(emptyComodoForm()); setAddingComApt(null); await fetchPav();
-    } catch { setErroComApt("Erro de conexao"); } finally { setSubComApt(false); }
+    } catch { setErroComApt("Erro de conexão"); } finally { setSubComApt(false); }
   };
 
   const handleDeleteCom = async (comId: string) => {
@@ -245,7 +248,7 @@ export default function PavimentoDetailPage() {
   };
 
   if (loading) return <div className="flex items-center justify-center py-40 text-zinc-400">Carregando...</div>;
-  if (!pav)    return <div className="flex items-center justify-center py-40 text-zinc-400">Pavimento nao encontrado.</div>;
+  if (!pav)    return <div className="flex items-center justify-center py-40 text-zinc-400">Pavimento não encontrado.</div>;
 
   const tipos  = pav.obras.apartamento_tipos;
   const outros = pav.obras.pavimentos.filter(p => p.id !== pavId);
@@ -262,7 +265,9 @@ export default function PavimentoDetailPage() {
         <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
       </td>
       <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.orcamento.total_paredes)}</td>
-      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmtN(c.teto_m2)}</td>
+      <td className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">
+        {fmtN(c.tetos?.length > 0 ? c.tetos.reduce((s,t) => s + Number(t.m2), 0) : c.teto_m2)}
+      </td>
       {ETAPAS.map(e => (
         <td key={e} className="px-3 py-3 text-right text-sm text-zinc-600 tabular-nums">{fmt(c.orcamento[e as EtapaKey])}</td>
       ))}
@@ -276,7 +281,7 @@ export default function PavimentoDetailPage() {
           {confirmDelCom === c.id ? (
             <span className="flex items-center gap-1 text-xs">
               <button onClick={() => onDelete(c.id)} disabled={deletingCom} className="text-red-600 font-semibold">Sim</button>
-              <button onClick={() => setConfirmDelCom(null)} className="text-zinc-400">Nao</button>
+              <button onClick={() => setConfirmDelCom(null)} className="text-zinc-400">Não</button>
             </span>
           ) : (
             <button onClick={() => setConfirmDelCom(c.id)} className="text-xs text-zinc-300 hover:text-red-500 transition-colors">Excluir</button>
@@ -289,7 +294,7 @@ export default function PavimentoDetailPage() {
   const ComodoTableHead = () => (
     <thead className="bg-zinc-50 border-b border-zinc-100">
       <tr>
-        <th className="text-left text-xs font-semibold text-zinc-500 px-4 sm:px-6 py-2">Comodo</th>
+        <th className="text-left text-xs font-semibold text-zinc-500 px-4 sm:px-6 py-2">Cômodo</th>
         <th className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">Paredes m²</th>
         <th className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">Teto m²</th>
         {ETAPAS.map(e => <th key={e} className="text-right text-xs font-semibold text-zinc-500 px-3 py-2">{ETAPA_LABELS[e]}</th>)}
@@ -302,52 +307,105 @@ export default function PavimentoDetailPage() {
   const AddComodoForm = ({ onSubmit, form, setForm, erro, submitting, onCancel }: {
     onSubmit:(e:React.FormEvent)=>void; form:ComodoForm; setForm:(f:ComodoForm)=>void;
     erro:string|null; submitting:boolean; onCancel:()=>void;
-  }) => (
-    <form onSubmit={onSubmit} className="p-3 sm:p-4 border-t border-zinc-100 bg-zinc-50/50">
-      {erro && <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">{erro}</div>}
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <select value={form.tipo} onChange={e => setForm({...form, tipo:e.target.value})}
-          className="border border-zinc-200 rounded-lg px-2.5 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-          {TIPOS_COMODO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <input value={form.nome} onChange={e => setForm({...form, nome:e.target.value})}
-          className={`flex-1 min-w-28 ${INPUT_SM}`} placeholder="Nome opcional" />
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-        {(["parede1_m2","parede2_m2","parede3_m2","parede4_m2"] as const).map((f,fi) => (
-          <div key={f}>
-            <label className="block text-xs text-zinc-400 mb-1">Parede {fi+1} m²</label>
-            <input type="number" step="0.01" min="0" value={form[f]}
-              onChange={e => setForm({...form, [f]:e.target.value})}
-              className={`w-full ${INPUT_SM}`} placeholder="0,00" />
-          </div>
-        ))}
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Teto m²</label>
-          <input type="number" step="0.01" min="0" value={form.teto_m2}
-            onChange={e => setForm({...form, teto_m2:e.target.value})}
-            className={`w-full ${INPUT_SM}`} placeholder="0,00" />
+  }) => {
+    const addParede = () => setForm({...form, paredes:[...form.paredes, {m2:"", cor:""}]});
+    const removeParede = (i:number) => setForm({...form, paredes:form.paredes.filter((_,idx)=>idx!==i)});
+    const updParede = (i:number, field:"m2"|"cor", val:string) => {
+      const p = [...form.paredes]; p[i]={...p[i],[field]:val}; setForm({...form, paredes:p});
+    };
+    const addTeto = () => setForm({...form, tetos:[...form.tetos, {m2:""}]});
+    const removeTeto = (i:number) => setForm({...form, tetos:form.tetos.filter((_,idx)=>idx!==i)});
+    const updTeto = (i:number, val:string) => {
+      const t=[...form.tetos]; t[i]={m2:val}; setForm({...form, tetos:t});
+    };
+    return (
+      <form onSubmit={onSubmit} className="p-3 sm:p-4 border-t border-zinc-100 bg-zinc-50/50">
+        {erro && <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">{erro}</div>}
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <select value={form.tipo} onChange={e => setForm({...form, tipo:e.target.value})}
+            className="border border-zinc-200 rounded-lg px-2.5 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+            {TIPOS_COMODO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <input value={form.nome} onChange={e => setForm({...form, nome:e.target.value})}
+            className={`flex-1 min-w-28 ${INPUT_SM}`} placeholder="Nome opcional" />
         </div>
-      </div>
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded-lg transition-colors">Cancelar</button>
-        <button type="submit" disabled={submitting} className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
-          {submitting ? "..." : "Adicionar"}
-        </button>
-      </div>
-    </form>
-  );
+
+        {/* Paredes */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-zinc-500">Paredes</span>
+            <button type="button" onClick={addParede} className="text-xs text-orange-600 hover:text-orange-700 font-medium">+ Adicionar parede</button>
+          </div>
+          <div className="space-y-2">
+            {form.paredes.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 w-14 shrink-0">Parede {i+1}</span>
+                <input type="number" step="0.01" min="0" value={p.m2}
+                  onChange={e => updParede(i,"m2",e.target.value)}
+                  className={`w-24 ${INPUT_SM}`} placeholder="0,00 m²" />
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={p.cor||"#ffffff"}
+                    onChange={e => updParede(i,"cor",e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-zinc-200 p-0.5 bg-white" title="Cor da parede" />
+                  <input type="text" value={p.cor||""} onChange={e => updParede(i,"cor",e.target.value)}
+                    className={`w-24 ${INPUT_SM} font-mono text-xs`} placeholder="#rrggbb" />
+                  <span className="text-xs text-zinc-300 ml-1">{p.cor ? "" : "sem cor"}</span>
+                </div>
+                {form.paredes.length > 1 && (
+                  <button type="button" onClick={() => removeParede(i)} className="text-zinc-300 hover:text-red-500 text-sm leading-none ml-auto">✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tetos */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-zinc-500">Tetos</span>
+            <button type="button" onClick={addTeto} className="text-xs text-orange-600 hover:text-orange-700 font-medium">+ Adicionar teto</button>
+          </div>
+          <div className="space-y-2">
+            {form.tetos.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 w-14 shrink-0">Teto {i+1}</span>
+                <input type="number" step="0.01" min="0" value={t.m2}
+                  onChange={e => updTeto(i, e.target.value)}
+                  className={`w-24 ${INPUT_SM}`} placeholder="0,00 m²" />
+                {form.tetos.length > 1 && (
+                  <button type="button" onClick={() => removeTeto(i)} className="text-zinc-300 hover:text-red-500 text-sm leading-none">✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded-lg transition-colors">Cancelar</button>
+          <button type="submit" disabled={submitting} className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+            {submitting ? "..." : "Adicionar"}
+          </button>
+        </div>
+      </form>
+    );
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
       {/* Breadcrumb */}
-      <div className="flex items-center flex-wrap gap-2 text-sm text-zinc-400 mb-6">
-        <Link href="/orcamentos/obras" className="hover:text-zinc-700">Obras</Link>
-        <span>/</span>
-        <Link href={`/orcamentos/obras/${id}`} className="hover:text-zinc-700 truncate max-w-[120px]">{pav.obras.nome}</Link>
-        <span>/</span>
-        <span className="text-zinc-700 font-medium">{pav.nome}</span>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "0.72rem", color: "rgba(26,42,58,0.4)", marginBottom: "clamp(1.25rem,3vw,2rem)" }}>
+        <Link href="/orcamentos/obras" style={{ color: "rgba(26,42,58,0.4)", textDecoration: "none" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#1A2A3A"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "rgba(26,42,58,0.4)"}
+        >Obras</Link>
+        <ChevronRight size={11} />
+        <Link href={`/orcamentos/obras/${id}`} style={{ color: "rgba(26,42,58,0.4)", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "120px" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#1A2A3A"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "rgba(26,42,58,0.4)"}
+        >{pav.obras.nome}</Link>
+        <ChevronRight size={11} />
+        <span style={{ color: "#1A2A3A", fontWeight: 500 }}>{pav.nome}</span>
       </div>
 
       {/* Header */}
@@ -358,7 +416,7 @@ export default function PavimentoDetailPage() {
             <input required value={editNome} onChange={e => setEditNome(e.target.value)} className={INPUT_SM} placeholder="Nome do pavimento" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Numero</label>
+            <label className="block text-xs font-medium text-zinc-500 mb-1">Número</label>
             <input required type="number" min="0" value={editNum} onChange={e => setEditNum(e.target.value)} className={`w-20 ${INPUT_SM}`} placeholder="N°" />
           </div>
           <button type="submit" disabled={savingPav} className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
@@ -367,26 +425,34 @@ export default function PavimentoDetailPage() {
           <button type="button" onClick={() => setEditingPav(false)} className="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded-lg transition-colors">Cancelar</button>
         </form>
       ) : (
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "clamp(1.5rem,3vw,2rem)" }}>
           <div>
-            <p className="text-xs sm:text-sm text-zinc-400 mb-1">Pavimento {pav.numero} — {pav.obras.nome}</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{pav.nome}</h1>
+            <p style={{ fontSize: "0.75rem", color: "rgba(26,42,58,0.4)", marginBottom: "4px" }}>Pavimento {pav.numero} — {pav.obras.nome}</p>
+            <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{pav.nome}</h1>
           </div>
-          <div className="flex flex-col sm:items-end gap-3 shrink-0">
-            <div className="sm:text-right">
-              <div className="text-xs text-zinc-400">Orcamento do Pavimento</div>
-              <div className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px", flexShrink: 0 }}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.4)", marginBottom: "2px" }}>Orçamento do Pavimento</div>
+              <div style={{ fontSize: "clamp(1.25rem,3vw,1.75rem)", fontWeight: 700, color: "#1A2A3A", fontVariantNumeric: "tabular-nums" }}>{fmt(pav.orcamento_total)}</div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={startEditPav} className={BTN_SM}>Editar</button>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button onClick={startEditPav}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", padding: "7px 12px", borderRadius: "8px", border: "1px solid rgba(26,42,58,0.14)", color: "#1A2A3A", background: "none", cursor: "pointer", transition: "border-color 0.15s" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "rgba(26,42,58,0.35)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "rgba(26,42,58,0.14)"}
+              ><Pencil size={11} strokeWidth={2} /> Editar</button>
               {confirmDeletePav ? (
-                <span className="flex items-center gap-1.5 text-xs">
-                  <span className="text-zinc-500">Excluir pavimento?</span>
-                  <button onClick={handleDeletePav} disabled={deletingPav} className="text-red-600 font-semibold hover:text-red-700 disabled:opacity-50">Sim</button>
-                  <button onClick={() => setConfirmDeletePav(false)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem" }}>
+                  <span style={{ color: "rgba(26,42,58,0.5)" }}>Excluir?</span>
+                  <button onClick={handleDeletePav} disabled={deletingPav} style={{ color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>Sim</button>
+                  <button onClick={() => setConfirmDeletePav(false)} style={{ color: "rgba(26,42,58,0.4)", background: "none", border: "none", cursor: "pointer" }}>Não</button>
                 </span>
               ) : (
-                <button onClick={() => setConfirmDeletePav(true)} className="text-xs text-zinc-400 hover:text-red-500 border border-zinc-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition-colors">Excluir</button>
+                <button onClick={() => setConfirmDeletePav(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", padding: "7px 12px", borderRadius: "8px", border: "1px solid rgba(26,42,58,0.14)", color: "rgba(26,42,58,0.45)", background: "none", cursor: "pointer", transition: "all 0.15s" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#dc2626"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(220,38,38,0.3)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "rgba(26,42,58,0.45)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(26,42,58,0.14)"; }}
+                ><Trash2 size={11} strokeWidth={2} /> Excluir</button>
               )}
             </div>
           </div>
@@ -398,7 +464,7 @@ export default function PavimentoDetailPage() {
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-100">
           <div>
             <h2 className="text-sm font-semibold text-zinc-900">Tipos de Apartamento</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">Classificacoes para organizar apartamentos desta obra</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Classificações para organizar apartamentos desta obra</p>
           </div>
           <button onClick={() => setAddingTipo(t => !t)} className="text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 hover:border-orange-400 px-3 py-1.5 rounded-lg transition-colors">
             {addingTipo ? "Cancelar" : "+ Novo tipo"}
@@ -487,7 +553,7 @@ export default function PavimentoDetailPage() {
                   className={`w-full ${INPUT_SM}`} placeholder="Ex: Apto 201" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Numero</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Número</label>
                 <input type="number" value={aptForm.numero} onChange={e => setAptForm({...aptForm, numero:e.target.value})}
                   className={`w-full ${INPUT_SM}`} placeholder="201" />
               </div>
@@ -547,7 +613,7 @@ export default function PavimentoDetailPage() {
                       ) : (
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="font-semibold text-zinc-800 text-sm truncate">{aptLabel(apt)}</span>
-                          <span className="text-xs text-zinc-400 shrink-0">{apt.comodos.length} comodo{apt.comodos.length !== 1 ? "s" : ""}</span>
+                          <span className="text-xs text-zinc-400 shrink-0">{apt.comodos.length} cômodo{apt.comodos.length !== 1 ? "s" : ""}</span>
                         </div>
                       )}
                     </button>
@@ -560,7 +626,7 @@ export default function PavimentoDetailPage() {
                           {confirmDelApt === apt.id ? (
                             <span className="flex items-center gap-1 text-xs">
                               <button onClick={() => handleDeleteApt(apt.id)} disabled={deletingApt} className="text-red-600 font-semibold">Sim</button>
-                              <button onClick={() => setConfirmDelApt(null)} className="text-zinc-400">Nao</button>
+                              <button onClick={() => setConfirmDelApt(null)} className="text-zinc-400">Não</button>
                             </span>
                           ) : (
                             <button onClick={() => setConfirmDelApt(apt.id)} className="text-xs text-zinc-300 hover:text-red-500 transition-colors">Excluir</button>
@@ -605,7 +671,7 @@ export default function PavimentoDetailPage() {
                         <div className="px-4 sm:px-6 py-2.5 border-t border-zinc-100">
                           <button onClick={() => { setAddingComApt(apt.id); setNewComApt(emptyComodoForm()); }}
                             className="text-xs text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                            + Adicionar comodo a este apartamento
+                            + Adicionar cômodo a este apartamento
                           </button>
                         </div>
                       )}
@@ -622,11 +688,11 @@ export default function PavimentoDetailPage() {
       <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-100">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">Comodos Avulsos</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">Comodos sem apartamento (halls, areas comuns, escadas...)</p>
+            <h2 className="text-sm font-semibold text-zinc-900">Cômodos Avulsos</h2>
+            <p className="text-xs text-zinc-400 mt-0.5">Cômodos sem apartamento (halls, áreas comuns, escadas...)</p>
           </div>
           <button onClick={() => setAddingCom(a => !a)} className="text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 hover:border-orange-400 px-3 py-1.5 rounded-lg transition-colors">
-            {addingCom ? "Cancelar" : "+ Adicionar comodo"}
+            {addingCom ? "Cancelar" : "+ Adicionar cômodo"}
           </button>
         </div>
 
@@ -649,13 +715,13 @@ export default function PavimentoDetailPage() {
             onCancel={() => { setAddingCom(false); setErroCom(null); setNewCom(emptyComodoForm()); }}
           />
         ) : pav.comodos.length === 0 ? (
-          <div className="px-6 py-8 text-center text-sm text-zinc-400">Nenhum comodo avulso neste pavimento</div>
+          <div className="px-6 py-8 text-center text-sm text-zinc-400">Nenhum cômodo avulso neste pavimento</div>
         ) : null}
       </div>
 
       {/* Total geral */}
       <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <span className="text-sm sm:text-base font-semibold text-zinc-800">Orcamento Total do Pavimento</span>
+        <span className="text-sm sm:text-base font-semibold text-zinc-800">Orçamento Total do Pavimento</span>
         <span className="text-xl sm:text-2xl font-bold text-orange-600 tabular-nums">{fmt(pav.orcamento_total)}</span>
       </div>
     </div>

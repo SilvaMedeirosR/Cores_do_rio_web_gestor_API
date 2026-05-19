@@ -8,7 +8,7 @@ const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 const ETAPAS = [
   { value: "massa_parede", label: "Massa Parede" },
   { value: "massa_teto",   label: "Massa Teto"   },
-  { value: "lixacao",      label: "Lixacao"       },
+  { value: "lixacao",      label: "Lixação"       },
   { value: "pintura",      label: "Pintura"       },
   { value: "acabamento",   label: "Acabamento"    },
 ];
@@ -70,18 +70,18 @@ export default function ObraEditarPage() {
       });
       if (!r.ok) { const j = await r.json(); setErro(j.error ?? "Erro ao salvar"); return; }
       router.push(`/orcamentos/obras/${id}`);
-    } catch { setErro("Erro de conexao com a API"); } finally { setSub(false); }
+    } catch { setErro("Erro de conexão com a API"); } finally { setSub(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center py-40 text-zinc-400">Carregando...</div>;
-  if (!form)   return <div className="flex items-center justify-center py-40 text-zinc-400">Obra nao encontrada.</div>;
+  if (!form)   return <div className="flex items-center justify-center py-40 text-zinc-400">Obra não encontrada.</div>;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
       {/* Breadcrumb */}
       <div className="flex items-center flex-wrap gap-2 text-sm text-zinc-400 mb-6">
-        <Link href="/orcamentos" className="hover:text-zinc-700">Orcamentos</Link>
+        <Link href="/orcamentos" className="hover:text-zinc-700">Orçamentos</Link>
         <span>/</span>
         <Link href="/orcamentos/obras" className="hover:text-zinc-700">Obras</Link>
         <span>/</span>
@@ -119,7 +119,7 @@ export default function ObraEditarPage() {
 
         {/* Precos */}
         <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
-          <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Preco por m² / Etapa</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Preço por m² / Etapa</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {form.precos.map((p, i) => (
               <div key={p.etapa}>
@@ -143,7 +143,7 @@ export default function ObraEditarPage() {
           </Link>
           <button type="submit" disabled={submitting}
             className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
-            {submitting ? "Salvando..." : "Salvar Alteracoes"}
+            {submitting ? "Salvando..." : "Salvar Alterações"}
           </button>
         </div>
       </form>

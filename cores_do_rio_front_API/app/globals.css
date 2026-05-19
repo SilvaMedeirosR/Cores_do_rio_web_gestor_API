@@ -1,34 +1,466 @@
 @import "tailwindcss";
 
 :root {
-  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --header-h:      56px;
+  --cr-navy:       #1A2A3A;
+  --cr-cream:      #F3ECE0;
+  --cr-navy-06:    rgba(26,42,58,0.06);
+  --cr-navy-10:    rgba(26,42,58,0.10);
+  --cr-navy-14:    rgba(26,42,58,0.14);
+  --cr-navy-30:    rgba(26,42,58,0.30);
+  --cr-navy-45:    rgba(26,42,58,0.45);
+  --font-inter:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius-box:    14px;
+  --radius-card:   12px;
+  --radius-input:  8px;
 }
 
 @theme inline {
   --font-sans: var(--font-inter);
 }
 
+/* ── Base ──────────────────────────────────────────────────────── */
+
 body {
   font-family: var(--font-inter);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f4f4f3;
-  color: #18181b;
+  background-color: var(--cr-cream);
+  color: var(--cr-navy);
 }
 
-input,
-select,
-textarea {
-  color: #18181b !important;
+input, select, textarea {
+  color: var(--cr-navy) !important;
   background-color: #ffffff;
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #a1a1aa;
+input::placeholder, textarea::placeholder {
+  color: var(--cr-navy-30);
 }
 
 input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  opacity: 0.4;
+input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
+
+/* ── Headings com Cormorant ─────────────────────────────────────── */
+
+h1, h2, h3 {
+  font-family: var(--font-cormorant), var(--font-inter);
+}
+
+/* Labels pequenas (<= text-sm uppercase) permanecem Inter */
+h2.label-sm, h3.label-sm,
+.label-inter { font-family: var(--font-inter) !important; }
+
+/* ── Orange → Navy (substitução global) ────────────────────────── */
+
+.text-orange-400, .text-orange-500,
+.text-orange-600, .text-orange-700, .text-orange-800 {
+  color: var(--cr-navy) !important;
+}
+.hover\:text-orange-600:hover, .hover\:text-orange-700:hover,
+.hover\:text-orange-500:hover {
+  color: var(--cr-navy) !important;
+  opacity: 0.7;
+}
+.group:hover .group-hover\:text-orange-600 { color: var(--cr-navy) !important; opacity: 0.65; }
+
+.bg-orange-50, .bg-orange-100,
+.bg-orange-50\/40, .bg-orange-50\/50 {
+  background-color: var(--cr-navy-06) !important;
+}
+.bg-orange-400, .bg-orange-500, .bg-orange-600 {
+  background-color: var(--cr-navy) !important;
+}
+.hover\:bg-orange-100:hover, .hover\:bg-orange-50:hover {
+  background-color: var(--cr-navy-06) !important;
+}
+.border-orange-200, .border-orange-300,
+.hover\:border-orange-400:hover {
+  border-color: var(--cr-navy-14) !important;
+}
+.focus\:ring-orange-500:focus {
+  --tw-ring-color: var(--cr-navy) !important;
+  --tw-ring-opacity: 0.35;
+}
+.focus\:border-orange-500:focus { border-color: var(--cr-navy) !important; }
+.ring-orange-500 { --tw-ring-color: var(--cr-navy) !important; }
+
+/* ── Blue → Navy-accent (apartamentos) ─────────────────────────── */
+
+.bg-blue-50, .bg-blue-50\/40, .bg-blue-50\/60,
+.bg-blue-100 {
+  background-color: rgba(26,42,58,0.04) !important;
+}
+.border-blue-100, .border-blue-200 {
+  border-color: rgba(26,42,58,0.09) !important;
+}
+.text-blue-600, .text-blue-700, .text-blue-800 {
+  color: var(--cr-navy) !important;
+}
+.hover\:text-blue-800:hover { color: var(--cr-navy) !important; opacity: 0.65; }
+.hover\:border-blue-400:hover { border-color: rgba(26,42,58,0.30) !important; }
+
+/* ── Zinc → navy-tinted (harmonia com fundo creme) ─────────────── */
+
+.bg-zinc-50  { background-color: rgba(26,42,58,0.03) !important; }
+.bg-zinc-100 { background-color: rgba(26,42,58,0.06) !important; }
+.bg-zinc-50\/50, .bg-zinc-50\/30 { background-color: rgba(26,42,58,0.02) !important; }
+
+.border-zinc-200 { border-color: var(--cr-navy-10) !important; }
+.border-zinc-100 { border-color: rgba(26,42,58,0.06) !important; }
+.divide-zinc-100 > * + * { border-color: rgba(26,42,58,0.06) !important; }
+.divide-zinc-50  > * + * { border-color: rgba(26,42,58,0.04) !important; }
+
+/* Zinc text */
+.text-zinc-400 { color: var(--cr-navy-45) !important; }
+.text-zinc-500 { color: rgba(26,42,58,0.55) !important; }
+.text-zinc-300 { color: var(--cr-navy-30) !important; }
+.text-zinc-600 { color: rgba(26,42,58,0.65) !important; }
+.text-zinc-700 { color: rgba(26,42,58,0.78) !important; }
+.text-zinc-900 { color: var(--cr-navy) !important; }
+
+/* Hover zinc */
+.hover\:text-zinc-600:hover { color: rgba(26,42,58,0.65) !important; }
+.hover\:text-zinc-700:hover { color: rgba(26,42,58,0.78) !important; }
+.hover\:text-zinc-800:hover { color: rgba(26,42,58,0.9) !important; }
+.hover\:bg-zinc-50:hover    { background-color: rgba(26,42,58,0.04) !important; }
+.hover\:bg-zinc-100:hover   { background-color: rgba(26,42,58,0.07) !important; }
+.hover\:bg-zinc-50\/80:hover{ background-color: rgba(26,42,58,0.03) !important; }
+.hover\:border-zinc-300:hover { border-color: rgba(26,42,58,0.22) !important; }
+.hover\:border-zinc-400:hover { border-color: rgba(26,42,58,0.35) !important; }
+
+/* ── Cards / painéis ────────────────────────────────────────────── */
+
+.bg-white { background-color: #ffffff; }
+
+/* Border-radius consistente em todos os cards */
+.rounded-xl  { border-radius: var(--radius-box) !important; }
+.rounded-2xl { border-radius: 18px !important; }
+.rounded-lg  { border-radius: var(--radius-input) !important; }
+
+/* Sombras mais suaves no creme */
+.shadow-sm  { box-shadow: 0 1px 4px rgba(26,42,58,0.07) !important; }
+.shadow-md  { box-shadow: 0 4px 16px rgba(26,42,58,0.09) !important; }
+.shadow-lg  { box-shadow: 0 8px 32px rgba(26,42,58,0.10) !important; }
+.shadow-xl  { box-shadow: 0 12px 40px rgba(26,42,58,0.12) !important; }
+
+/* Hover shadow para cards clicáveis */
+.hover\:shadow-md:hover { box-shadow: 0 4px 20px rgba(26,42,58,0.10) !important; }
+
+/* ── Inputs globais harmonizados ───────────────────────────────── */
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="date"],
+input[type="color"],
+select,
+textarea {
+  border-color: var(--cr-navy-14) !important;
+  border-radius: var(--radius-input);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--cr-navy) !important;
+  box-shadow: 0 0 0 3px rgba(26,42,58,0.10) !important;
+}
+
+/* ── Badges de status — transição suave ─────────────────────────── */
+
+[class*="rounded-full"] {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+}
+
+/* Badge verde */
+.bg-green-50  { background-color: rgba(34,197,94,0.10) !important; }
+.text-green-700 { color: #16a34a !important; }
+.bg-green-100 { background-color: rgba(34,197,94,0.16) !important; }
+
+/* Badge amarelo (pendente) */
+.bg-yellow-50  { background-color: rgba(234,179,8,0.10) !important; }
+.text-yellow-700 { color: rgba(161,130,0,1) !important; }
+.bg-yellow-400  { background-color: #ca8a04 !important; }
+
+/* Badge vermelho */
+.bg-red-50  { background-color: rgba(239,68,68,0.08) !important; }
+.text-red-700 { color: #dc2626 !important; }
+.border-red-200 { border-color: rgba(239,68,68,0.20) !important; }
+.hover\:bg-red-100:hover { background-color: rgba(239,68,68,0.12) !important; }
+
+/* ── Scrollbar sutil ────────────────────────────────────────────── */
+
+::-webkit-scrollbar              { width: 6px; height: 6px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: rgba(26,42,58,0.15); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover  { background: rgba(26,42,58,0.28); }
+
+/* ── Mobile: tabelas com scroll horizontal ─────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-box);
+}
+
+/* ── Animação de entrada de página ─────────────────────────────── */
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+main {
+  animation: page-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Rodapé marquee ─────────────────────────────────────────────── */
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 80s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+
+/* ── Animações de interação ─────────────────────────────────────── */
+
+@keyframes anim-shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-5px); }
+  30%       { transform: translateX(5px); }
+  45%       { transform: translateX(-4px); }
+  60%       { transform: translateX(4px); }
+  75%       { transform: translateX(-2px); }
+  90%       { transform: translateX(2px); }
+}
+
+@keyframes anim-success-pop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  10%       { transform: rotate(18deg); }
+  20%       { transform: rotate(-16deg); }
+  30%       { transform: rotate(12deg); }
+  40%       { transform: rotate(-10deg); }
+  50%       { transform: rotate(6deg); }
+  60%       { transform: rotate(-4deg); }
+  70%       { transform: rotate(2deg); }
+}
+
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%       { box-shadow: 0 0 0 6px rgba(239,68,68,0.18); }
+}
+
+@keyframes slide-up-fade {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes status-change {
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  60%  { transform: scale(1.06); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.anim-shake                             { animation: anim-shake 0.45s ease; }
+.anim-success-pop, .anim-success-circle { animation: anim-success-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+.bell-ring                              { animation: bell-ring 0.7s ease; }
+.pulse-danger                           { animation: pulse-danger 1.8s ease-in-out infinite; }
+.slide-up-fade                          { animation: slide-up-fade 0.25s ease both; }
+.status-change                          { animation: status-change 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+/* ── Paginação: transição spring (puxar → resistir → soltar) ────── */
+
+@keyframes cr-list-next {
+  0%   { opacity: 0.35; transform: translateX(28px) scale(0.99); }
+  60%  { opacity: 1;    transform: translateX(-3px) scale(1.003); }
+  100% { opacity: 1;    transform: translateX(0) scale(1); }
+}
+
+@keyframes cr-list-prev {
+  0%   { opacity: 0.35; transform: translateX(-28px) scale(0.99); }
+  60%  { opacity: 1;    transform: translateX(3px) scale(1.003); }
+  100% { opacity: 1;    transform: translateX(0) scale(1); }
+}
+
+/* cubic-bezier com leve overshoot = sensação de spring/mola */
+.cr-list-next { animation: cr-list-next 0.38s cubic-bezier(0.34, 1.28, 0.64, 1) both; }
+.cr-list-prev { animation: cr-list-prev 0.38s cubic-bezier(0.34, 1.28, 0.64, 1) both; }
+
+/* Botão com ripple */
+.cr-btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.cr-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(243,236,224,0.35) 0%, transparent 70%);
+  transform: scale(0);
+  opacity: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: transform 0.4s ease, opacity 0.4s ease;
+}
+.cr-btn-primary:active::after {
+  transform: scale(4);
+  opacity: 0;
+  transition: none;
+}
+
+/* ── Helpers de exibição ────────────────────────────────────────── */
+
+.show-mobile  { display: block !important; }
+.show-desktop { display: none  !important; }
+
+@media (min-width: 640px) {
+  .show-mobile  { display: none  !important; }
+  .show-desktop { display: block !important; }
+}
+
+/* ── Sistema responsivo padronizado ────────────────────────────── */
+/*
+  Breakpoints:
+    xs   <  480px   celular compacto (360–479px)
+    sm   480–639px  celular grande / landscape
+    md   640–767px  tablet pequeno   [Tailwind sm = 640px]
+    lg   768–1023px tablet + desktop [Tailwind md = 768px]
+    xl  ≥ 1024px    desktop largo    [Tailwind lg = 1024px]
+*/
+
+/* ── Scroll global ──────────────────────────────────────────────── */
+html {
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+body {
+  overflow-x: hidden;
+  /* Preserva o bounce nativo do iOS / overscroll elástico */
+  overscroll-behavior-y: auto;
+}
+
+/* Contêiners scrolláveis internos não propagam bounce para a página */
+.cr-scroll-x, .table-wrap { overscroll-behavior-x: contain; }
+
+/* Todos os boxes/cards nunca excedem o container */
+*, *::before, *::after { box-sizing: border-box; }
+[class*="rounded-xl"],
+[class*="rounded-lg"],
+[class*="rounded-2xl"],
+.bg-white { max-width: 100%; }
+
+/* ── Variáveis de espaçamento por breakpoint ─────────────────────── */
+:root {
+  --page-px:  clamp(0.875rem, 4vw, 1.5rem);
+  --page-py:  clamp(1.25rem, 5vw, 2.5rem);
+  --card-gap: clamp(0.75rem, 2vw, 1rem);
+}
+
+/* ── Utilitário: container de página padronizado ─────────────────── */
+.cr-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--page-py) var(--page-px);
+}
+
+/* Scroll horizontal seguro em tabelas e listas */
+.cr-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── xs helpers (complementam show-mobile/show-desktop) ─────────── */
+.show-xs { display: none  !important; }
+.hide-xs { display: block !important; }
+
+@media (max-width: 479px) {
+  .show-xs { display: block !important; }
+  .hide-xs { display: none  !important; }
+}
+
+/* ── xs: celular compacto (< 480px) ─────────────────────────────── */
+@media (max-width: 479px) {
+  /* Grids 3-4 colunas → 1 coluna */
+  .grid-cols-3, .grid-cols-4,
+  .sm\:grid-cols-3, .sm\:grid-cols-4,
+  .lg\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tabelas com scroll automático */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+
+  /* Padding de página */
+  .p-5   { padding: 0.875rem !important; }
+  .p-6   { padding: 1rem !important; }
+  .px-5  { padding-left: 0.875rem !important; padding-right: 0.875rem !important; }
+  .px-6  { padding-left: 0.875rem !important; padding-right: 0.875rem !important; }
+  .px-8  { padding-left: 1rem !important; padding-right: 1rem !important; }
+  .py-8  { padding-top: 1.25rem !important; padding-bottom: 1.25rem !important; }
+  .py-10 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+  .py-12 { padding-top: 1.75rem !important; padding-bottom: 1.75rem !important; }
+
+  /* Seções */
+  .space-y-10 > * + * { margin-top: 1.75rem !important; }
+  .space-y-8  > * + * { margin-top: 1.5rem !important; }
+  .space-y-6  > * + * { margin-top: 1.25rem !important; }
+
+  /* Textos não quebram container */
+  h1, h2, h3 { word-break: break-word; }
+
+  /* Botões e links em grupos não saem da tela */
+  .flex-wrap > button,
+  .flex-wrap > a[class*="rounded"] { flex-shrink: 0; }
+
+  /* Flex row que pode precisar quebrar em xs */
+  .xs\:flex-col { flex-direction: column !important; }
+}
+
+/* ── sm: celular grande (480–639px) ─────────────────────────────── */
+@media (min-width: 480px) and (max-width: 639px) {
+  .grid-cols-3, .grid-cols-4,
+  .sm\:grid-cols-3, .sm\:grid-cols-4,
+  .lg\:grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ── md: sm do Tailwind (640–767px) ─────────────────────────────── */
+@media (max-width: 639px) {
+  h1 { font-size: clamp(1.6rem, 6vw, 2.25rem) !important; }
+
+  .p-6  { padding: 1rem !important; }
+  .p-5  { padding: 0.875rem !important; }
+  .px-6 { padding-left: 1rem !important; padding-right: 1rem !important; }
+}
+
+/* ── Responsivo global ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* kpi-grid mantém 2 colunas em toda faixa mobile */
+  .grid-cols-2:not(.kpi-grid), .grid-cols-3, .sm\:grid-cols-2:not(.kpi-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  .flex-wrap > button,
+  .flex-wrap > a[class*="rounded"] {
+    flex-shrink: 0;
+  }
 }

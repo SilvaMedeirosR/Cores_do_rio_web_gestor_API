@@ -15,9 +15,9 @@ export const IDO_ABS_PCT = 0.10;  // 10% de absenteísmo = teto tolerável de te
 export const IDO_MAT_PCT = 0.15;  // 15% de material excedente = teto tolerável de material
 
 export const OBRA_CORES: Record<string, string> = {
-  'obra-001': '#ef4444',
-  'obra-002': '#3b82f6',
-  'obra-003': '#f97316',
+  'obra-001': '#1A2A3A',
+  'obra-002': '#4a7fa5',
+  'obra-003': '#8da8be',
 };
 
 export const corObra = (id: string, idx: number) =>
@@ -131,32 +131,32 @@ export function KpiCard({ label, value, sub, color = "zinc" }: {
   label: string; value: string; sub?: string;
   color?: "zinc" | "orange" | "green" | "red" | "blue";
 }) {
-  const colors = {
-    zinc:   "text-zinc-900",
-    orange: "text-orange-600",
-    green:  "text-emerald-600",
-    red:    "text-red-600",
-    blue:   "text-blue-600",
+  const colors: Record<string, string> = {
+    zinc:   "#1A2A3A",
+    orange: "#1A2A3A",
+    green:  "#16a34a",
+    red:    "#dc2626",
+    blue:   "#2563eb",
   };
   return (
-    <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
-      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-2xl font-bold tabular-nums ${colors[color]}`}>{value}</p>
-      {sub && <p className="text-xs text-zinc-400 mt-0.5">{sub}</p>}
+    <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "14px", padding: "20px", boxShadow: "0 1px 4px rgba(26,42,58,0.07)" }}>
+      <p style={{ fontSize: "0.65rem", fontWeight: 600, color: "rgba(26,42,58,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>{label}</p>
+      <p style={{ fontSize: "1.5rem", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: colors[color] }}>{value}</p>
+      {sub && <p style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.4)", marginTop: "2px" }}>{sub}</p>}
     </div>
   );
 }
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-4">{children}</h2>
+    <h2 style={{ fontSize: "0.65rem", fontWeight: 600, color: "rgba(26,42,58,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "16px" }}>{children}</h2>
   );
 }
 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
-      <p className="text-xs font-medium text-zinc-400 mb-3">{title}</p>
+    <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "14px", padding: "20px", boxShadow: "0 1px 4px rgba(26,42,58,0.07)" }}>
+      <p style={{ fontSize: "0.7rem", fontWeight: 500, color: "rgba(26,42,58,0.4)", marginBottom: "12px" }}>{title}</p>
       {children}
     </div>
   );

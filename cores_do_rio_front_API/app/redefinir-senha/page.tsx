@@ -1,9 +1,37 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { Mail, ArrowLeft, CheckCircle2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-const INPUT = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
+function CRLogo({ size = 32, color = "#1A2A3A" }: { size?: number; color?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"
+      width={size} height={size} fill={color} aria-label="Cores do Rio" style={{ display: "block" }}>
+      <path d="M 500 110 L 90 400 L 910 400 L 500 110 Z M 500 195 L 280 350 L 720 350 L 500 195 Z" fillRule="evenodd"/>
+      <rect x="90"  y="370" width="820" height="60"/>
+      <rect x="90"  y="830" width="820" height="50"/>
+      <rect x="155" y="430" width="80"  height="400"/>
+      <rect x="335" y="430" width="80"  height="400"/>
+      <rect x="460" y="430" width="80"  height="400"/>
+      <rect x="585" y="430" width="80"  height="400"/>
+      <rect x="765" y="430" width="80"  height="400"/>
+    </svg>
+  );
+}
+
+const field: React.CSSProperties = {
+  width: "100%", padding: "11px 16px", borderRadius: "8px", fontSize: "0.875rem",
+  backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.14)",
+  color: "#1A2A3A", outline: "none", boxSizing: "border-box",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
+const lbl: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: "6px",
+  fontSize: "0.65rem", color: "rgba(26,42,58,0.45)",
+  letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "6px",
+};
 
 export default function RedefinirSenhaPage() {
   const [email, setEmail]     = useState("");
@@ -13,67 +41,69 @@ export default function RedefinirSenhaPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErro(null);
-    setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    setErro(null); setLoading(true);
+    const { error } = await createClient().auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/atualizar-senha`,
     });
-    if (error) { setErro("Erro ao enviar email. Verifique o endereco."); setLoading(false); return; }
-    setEnviado(true);
-    setLoading(false);
+    if (error) { setErro("Erro ao enviar email. Verifique o endereço."); setLoading(false); return; }
+    setEnviado(true); setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div style={{ minHeight: "100vh", backgroundColor: "#F3ECE0", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 16px" }}>
+      <div style={{ width: "100%", maxWidth: "400px" }}>
 
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-sm tracking-tight">CR</span>
-          </div>
-          <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Redefinir senha</h1>
-          <p className="text-zinc-400 text-sm mt-1 text-center">Enviaremos um link para seu email</p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "36px" }}>
+          <CRLogo size={48} color="#1A2A3A" />
+          <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "1.9rem", fontWeight: 400, color: "#1A2A3A", marginTop: "16px", marginBottom: "4px" }}>
+            Redefinir senha
+          </h1>
+          <p style={{ fontSize: "0.75rem", color: "rgba(26,42,58,0.4)", letterSpacing: "0.05em" }}>
+            Enviaremos um link para seu email
+          </p>
         </div>
 
         {enviado ? (
-          <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-6 text-center space-y-3">
-            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
+          <div className="anim-success-pop" style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "16px", padding: "40px 32px", textAlign: "center" }}>
+            <div style={{ width: "64px", height: "64px", borderRadius: "50%", backgroundColor: "rgba(34,197,94,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <CheckCircle2 size={32} color="#22c55e" strokeWidth={1.5} />
             </div>
-            <p className="text-sm font-medium text-zinc-900">Email enviado!</p>
-            <p className="text-xs text-zinc-400">Verifique sua caixa de entrada e clique no link para redefinir sua senha.</p>
-            <Link href="/login" className="block mt-2 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-              Voltar ao login
+            <p style={{ fontFamily: "var(--font-cormorant)", fontSize: "1.5rem", fontWeight: 400, color: "#1A2A3A", marginBottom: "10px" }}>Email enviado!</p>
+            <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.5)", lineHeight: 1.7, marginBottom: "24px" }}>
+              Verifique sua caixa de entrada e clique no link para redefinir sua senha.
+            </p>
+            <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#1A2A3A", textDecoration: "underline", textUnderlineOffset: "3px" }}>
+              <ArrowLeft size={12} /> Voltar ao login
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="bg-white border border-zinc-200 rounded-xl shadow-sm p-6 space-y-4">
+          <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "16px", padding: "clamp(1.25rem,4vw,2rem)", boxShadow: "0 4px 24px rgba(26,42,58,0.06)" }}>
             {erro && (
-              <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>
+              <div className="anim-shake" style={{ padding: "12px 16px", marginBottom: "20px", borderRadius: "8px", backgroundColor: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)", fontSize: "0.8rem", color: "#dc2626", display: "flex", alignItems: "center", gap: "8px" }}>
+                <X size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} /> {erro}
+              </div>
             )}
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1.5">Email cadastrado</label>
-              <input
-                type="email" required value={email}
-                onChange={e => setEmail(e.target.value)} className={INPUT}
-                placeholder="seu@email.com"
-              />
-            </div>
-            <button
-              type="submit" disabled={loading}
-              className="w-full bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-            >
-              {loading ? "Enviando..." : "Enviar link de redefinicao"}
-            </button>
-          </form>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+              <div>
+                <div style={lbl}><Mail size={10} strokeWidth={2.5} />Email cadastrado</div>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com" style={field}
+                  onFocus={e => { e.currentTarget.style.borderColor="#1A2A3A"; e.currentTarget.style.boxShadow="0 0 0 3px rgba(26,42,58,0.08)"; }}
+                  onBlur={e  => { e.currentTarget.style.borderColor="rgba(26,42,58,0.14)"; e.currentTarget.style.boxShadow="none"; }}
+                />
+              </div>
+              <button type="submit" disabled={loading} className="cr-btn-primary"
+                style={{ width: "100%", padding: "14px", borderRadius: "8px", border: "none", backgroundColor: "#1A2A3A", color: "#F3ECE0", cursor: loading ? "not-allowed" : "pointer", fontFamily: "var(--font-cormorant)", fontSize: "0.9rem", fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase", opacity: loading ? 0.55 : 1, transition: "opacity 0.15s" }}>
+                {loading ? "Enviando..." : "Enviar link"}
+              </button>
+            </form>
+          </div>
         )}
 
-        <p className="text-center text-sm text-zinc-400 mt-6">
-          <Link href="/login" className="text-orange-600 hover:text-orange-700 font-medium transition-colors">
-            ← Voltar ao login
+        <p style={{ textAlign: "center", fontSize: "0.75rem", color: "rgba(26,42,58,0.4)", marginTop: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+          <ArrowLeft size={12} />
+          <Link href="/login" style={{ color: "#1A2A3A", textDecoration: "underline", textUnderlineOffset: "3px" }}>
+            Voltar para o login
           </Link>
         </p>
       </div>

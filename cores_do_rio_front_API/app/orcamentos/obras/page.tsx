@@ -1,13 +1,16 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { Plus, Search, ChevronDown, X as XIcon, Trash2 } from "lucide-react";
+import { usePagination } from "@/lib/hooks/usePagination";
+import Pagination from "@/components/Pagination";
 
 const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 
 const ETAPAS = [
   { value: "massa_parede", label: "Massa Parede" },
   { value: "massa_teto",   label: "Massa Teto"   },
-  { value: "lixacao",      label: "Lixacao"       },
+  { value: "lixacao",      label: "Lixação"       },
   { value: "pintura",      label: "Pintura"       },
   { value: "acabamento",   label: "Acabamento"    },
 ];
@@ -16,26 +19,28 @@ const TIPOS_COMODO = [
   { value: "sala",           label: "Sala"            },
   { value: "quarto",         label: "Quarto"          },
   { value: "banheiro",       label: "Banheiro"        },
-  { value: "suite",          label: "Suite"           },
+  { value: "suite",          label: "Suíte"           },
   { value: "varanda",        label: "Varanda"         },
-  { value: "lavatorio",      label: "Lavatorio"       },
-  { value: "circulacao",     label: "Circulacao"      },
+  { value: "lavatorio",      label: "Lavatório"       },
+  { value: "circulacao",     label: "Circulação"      },
   { value: "corredor",       label: "Corredor"        },
-  { value: "escritorio",     label: "Escritorio"      },
-  { value: "area_tecnica",   label: "Area Tecnica"    },
+  { value: "escritorio",     label: "Escritório"      },
+  { value: "area_tecnica",   label: "Área Técnica"    },
   { value: "escada",         label: "Escada"          },
-  { value: "casa_maquinas",  label: "Casa de Maquinas"},
-  { value: "casa_exaustao",  label: "Casa de Exaustao"},
+  { value: "casa_maquinas",  label: "Casa de Máquinas"},
+  { value: "casa_exaustao",  label: "Casa de Exaustão"},
   { value: "estacionamento", label: "Estacionamento"  },
   { value: "garagem",        label: "Garagem"         },
-  { value: "deposito",       label: "Deposito"        },
-  { value: "area_lazer",     label: "Area de Lazer"   },
+  { value: "deposito",       label: "Depósito"        },
+  { value: "area_lazer",     label: "Área de Lazer"   },
 ];
 
 type EtapaKey = "massa_parede" | "massa_teto" | "lixacao" | "pintura" | "acabamento";
 
 interface Empreiteira     { id: string; nome: string; }
-interface ComodoForm      { tipo: string; nome: string; parede1_m2: string; parede2_m2: string; parede3_m2: string; parede4_m2: string; teto_m2: string; }
+interface ParedeInput     { m2: string; cor: string; }
+interface TetoInput       { m2: string; }
+interface ComodoForm      { tipo: string; nome: string; paredes: ParedeInput[]; tetos: TetoInput[]; }
 interface ApartamentoForm { nome: string; numero: string; tipo_nome: string; comodos: ComodoForm[]; }
 interface PavimentoForm   { nome: string; numero: string; tipo: string; apartamentos: ApartamentoForm[]; comodos: ComodoForm[]; }
 interface PrecoForm        { etapa: string; preco_m2: string; }
@@ -49,7 +54,7 @@ interface ObraLista {
   pavimentos: { id: string; nome: string; comodos: { id: string }[] }[];
 }
 
-const emptyComodo      = (): ComodoForm      => ({ tipo: "sala", nome: "", parede1_m2: "", parede2_m2: "", parede3_m2: "", parede4_m2: "", teto_m2: "" });
+const emptyComodo      = (): ComodoForm      => ({ tipo: "sala", nome: "", paredes: [{ m2: "", cor: "" }], tetos: [{ m2: "" }] });
 const emptyApartamento = (): ApartamentoForm => ({ nome: "", numero: "", tipo_nome: "", comodos: [emptyComodo()] });
 const emptyPavimento   = (): PavimentoForm   => ({ nome: "", numero: "", tipo: "pavimento", apartamentos: [], comodos: [] });
 const emptyForm        = (): ObraForm        => ({ nome: "", local: "", empreiteira_id: "", nova_empreiteira: "", precos: ETAPAS.map(e => ({ etapa: e.value, preco_m2: "" })), pavimentos: [emptyPavimento()], apartamento_tipos: [] });
@@ -61,8 +66,8 @@ const INPUT    = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm t
 const INPUT_SM = "border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
 
 function calcOrcComodo(c: ComodoForm, precoMap: Record<string, number>) {
-  const totalParedes = n(c.parede1_m2) + n(c.parede2_m2) + n(c.parede3_m2) + n(c.parede4_m2);
-  const teto         = n(c.teto_m2);
+  const totalParedes = c.paredes.reduce((s, p) => s + n(p.m2), 0);
+  const teto         = c.tetos.reduce((s, t) => s + n(t.m2), 0);
   const totalArea    = totalParedes + teto;
   const orc = {
     massa_parede: totalParedes * (precoMap.massa_parede ?? 0),
@@ -156,9 +161,7 @@ function EmpreiteiraSelect({
         <span className={selecionada ? "text-zinc-900" : "text-zinc-400"}>
           {selecionada ? selecionada.nome : "Selecionar empreiteira..."}
         </span>
-        <svg className={`w-4 h-4 text-zinc-400 transition-transform ${aberto ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <ChevronDown size={14} style={{ color: "rgba(26,42,58,0.35)", transition: "transform 0.2s", transform: aberto ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }} />
       </button>
 
       {aberto && (
@@ -255,6 +258,8 @@ export default function ObrasPage() {
       })
     : obras;
 
+  const pagObras = usePagination(obrasFiltradas);
+
   const setObra        = (f: "nome" | "local", v: string) => setForm(p => ({ ...p, [f]: v }));
   const setPreco       = (i: number, v: string)           => setForm(p => { const a = [...p.precos]; a[i] = { ...a[i], preco_m2: v }; return { ...p, precos: a }; });
   const addPav         = ()                               => setForm(p => ({ ...p, pavimentos: [...p.pavimentos, emptyPavimento()] }));
@@ -262,24 +267,24 @@ export default function ObrasPage() {
   const setPavField    = (pi: number, f: "nome" | "numero" | "tipo", v: string) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], [f]: v }; return { ...p, pavimentos: a }; });
 
   // cômodos avulsos do pavimento
-  const addComodoAvulso    = (pi: number)                     => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], comodos: [...a[pi].comodos, emptyComodo()] }; return { ...p, pavimentos: a }; });
-  const removeComodoAvulso = (pi: number, ci: number)         => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], comodos: a[pi].comodos.filter((_, i) => i !== ci) }; return { ...p, pavimentos: a }; });
-  const setComodoAvulso    = (pi: number, ci: number, f: keyof ComodoForm, v: string) => setForm(p => {
-    const a = [...p.pavimentos]; const cs = [...a[pi].comodos]; cs[ci] = { ...cs[ci], [f]: v }; a[pi] = { ...a[pi], comodos: cs }; return { ...p, pavimentos: a };
+  const addComodoAvulso    = (pi: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], comodos: [...a[pi].comodos, emptyComodo()] }; return { ...p, pavimentos: a }; });
+  const removeComodoAvulso = (pi: number, ci: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], comodos: a[pi].comodos.filter((_, i) => i !== ci) }; return { ...p, pavimentos: a }; });
+  const updComodoAvulso    = (pi: number, ci: number, fn: (c: ComodoForm) => ComodoForm) => setForm(p => {
+    const a = [...p.pavimentos]; const cs = [...a[pi].comodos]; cs[ci] = fn(cs[ci]); a[pi] = { ...a[pi], comodos: cs }; return { ...p, pavimentos: a };
   });
 
   // apartamentos do pavimento
-  const addApt    = (pi: number)                     => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: [...a[pi].apartamentos, emptyApartamento()] }; return { ...p, pavimentos: a }; });
-  const removeApt = (pi: number, ai: number)         => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: a[pi].apartamentos.filter((_, i) => i !== ai) }; return { ...p, pavimentos: a }; });
+  const addApt    = (pi: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: [...a[pi].apartamentos, emptyApartamento()] }; return { ...p, pavimentos: a }; });
+  const removeApt = (pi: number, ai: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: a[pi].apartamentos.filter((_, i) => i !== ai) }; return { ...p, pavimentos: a }; });
   const setAptField = (pi: number, ai: number, f: keyof Pick<ApartamentoForm, "nome" | "numero" | "tipo_nome">, v: string) => setForm(p => {
     const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], [f]: v }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a };
   });
 
   // cômodos dentro de um apartamento
-  const addComodoApt    = (pi: number, ai: number)                     => setForm(p => { const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], comodos: [...apts[ai].comodos, emptyComodo()] }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a }; });
-  const removeComodoApt = (pi: number, ai: number, ci: number)         => setForm(p => { const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], comodos: apts[ai].comodos.filter((_, i) => i !== ci) }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a }; });
-  const setComodoApt    = (pi: number, ai: number, ci: number, f: keyof ComodoForm, v: string) => setForm(p => {
-    const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; const cs = [...apts[ai].comodos]; cs[ci] = { ...cs[ci], [f]: v }; apts[ai] = { ...apts[ai], comodos: cs }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a };
+  const addComodoApt    = (pi: number, ai: number) => setForm(p => { const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], comodos: [...apts[ai].comodos, emptyComodo()] }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a }; });
+  const removeComodoApt = (pi: number, ai: number, ci: number) => setForm(p => { const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], comodos: apts[ai].comodos.filter((_, i) => i !== ci) }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a }; });
+  const updComodoApt    = (pi: number, ai: number, ci: number, fn: (c: ComodoForm) => ComodoForm) => setForm(p => {
+    const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; const cs = [...apts[ai].comodos]; cs[ci] = fn(cs[ci]); apts[ai] = { ...apts[ai], comodos: cs }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a };
   });
 
   const calcComodoTotal = (c: ComodoForm) => calcOrcComodo(c, precoMap).total;
@@ -307,7 +312,7 @@ export default function ObrasPage() {
         const isDefault = apts[ai].comodos.length === 1 &&
           apts[ai].comodos[0].tipo === "sala" &&
           apts[ai].comodos[0].nome === "" &&
-          !n(apts[ai].comodos[0].parede1_m2);
+          apts[ai].comodos[0].paredes.every(p => !n(p.m2));
         if (template && (isDefault || apts[ai].comodos.length === 0)) {
           apt.comodos = template;
         }
@@ -347,9 +352,8 @@ export default function ObrasPage() {
 
       const mapComodo = (c: ComodoForm) => ({
         tipo: c.tipo, nome: c.nome || null,
-        parede1_m2: n(c.parede1_m2), parede2_m2: n(c.parede2_m2),
-        parede3_m2: n(c.parede3_m2), parede4_m2: n(c.parede4_m2),
-        teto_m2: n(c.teto_m2),
+        paredes: c.paredes.map(p => ({ m2: n(p.m2), cor: p.cor || null })),
+        tetos:   c.tetos.map(t => ({ m2: n(t.m2) })),
       });
 
       const payload = {
@@ -374,7 +378,7 @@ export default function ObrasPage() {
       const r = await fetch(`${API}/obras`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) { const j = await r.json(); setErro(j.error ?? "Erro ao salvar"); return; }
       setForm(emptyForm()); setShowForm(false); await fetchObras();
-    } catch { setErro("Erro de conexao com a API"); } finally { setSub(false); }
+    } catch { setErro("Erro de conexão com a API"); } finally { setSub(false); }
   };
 
   const handleDelete = async (obraId: string) => {
@@ -394,25 +398,31 @@ export default function ObrasPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
       {/* Breadcrumb */}
-      <div className="flex items-center flex-wrap gap-2 text-xs text-zinc-400 mb-6 sm:mb-8">
-        <Link href="/" className="hover:text-zinc-600 transition-colors">Dashboard</Link>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px", fontSize: "0.72rem", color: "rgba(26,42,58,0.4)", marginBottom: "clamp(1.25rem,3vw,2rem)" }}>
+        <Link href="/" style={{ color: "rgba(26,42,58,0.4)", textDecoration: "none", transition: "color 0.15s" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#1A2A3A"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "rgba(26,42,58,0.4)"}
+        >Dashboard</Link>
         <span>/</span>
-        <span className="text-zinc-600 font-medium">Obras</span>
+        <span style={{ color: "#1A2A3A", fontWeight: 500 }}>Obras</span>
       </div>
 
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "clamp(1.5rem,3vw,2rem)" }}>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Obras</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">
+          <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1, marginBottom: "6px" }}>
+            Obras
+          </h1>
+          <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>
             {loading ? "Carregando..." : `${obras.length} obra${obras.length !== 1 ? "s" : ""} · ${empreiteiras.length} empreiteira${empreiteiras.length !== 1 ? "s" : ""}`}
           </p>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setErro(null); }}
-          className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2.5 sm:py-2 rounded-lg text-sm font-medium transition-colors"
+          className="cr-btn-primary"
+          style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", backgroundColor: showForm ? "rgba(26,42,58,0.7)" : "#1A2A3A", color: "#F3ECE0", cursor: "pointer", fontSize: "0.8rem", fontWeight: 500, transition: "background-color 0.15s" }}
         >
-          {showForm ? "Cancelar" : "+ Nova Obra"}
+          {showForm ? <><XIcon size={13} strokeWidth={2.5} /> Cancelar</> : <><Plus size={13} strokeWidth={2.5} /> Nova Obra</>}
         </button>
       </div>
 
@@ -450,7 +460,7 @@ export default function ObrasPage() {
 
           {/* Precos */}
           <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
-            <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Preco por m² / Etapa</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Preço por m² / Etapa</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {form.precos.map((p, i) => (
                 <div key={p.etapa}>
@@ -542,9 +552,7 @@ export default function ObrasPage() {
                       <button type="button" onClick={() => togglePav(pi)}
                         className="text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded"
                         title={pavCollapsed[pi] ? "Expandir" : "Minimizar"}>
-                        <svg className={`w-4 h-4 transition-transform ${pavCollapsed[pi] ? "-rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
+                        <ChevronDown size={15} style={{ transition: "transform 0.2s", transform: pavCollapsed[pi] ? "rotate(-90deg)" : "rotate(0deg)" }} />
                       </button>
                       {form.pavimentos.length > 1 && (
                         <button type="button" onClick={() => removePav(pi)}
@@ -592,9 +600,7 @@ export default function ObrasPage() {
                                     <button type="button" onClick={() => toggleApt(pi, ai)}
                                       className="text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded"
                                       title={aptCollapsed[`${pi}-${ai}`] ? "Expandir" : "Minimizar"}>
-                                      <svg className={`w-3.5 h-3.5 transition-transform ${aptCollapsed[`${pi}-${ai}`] ? "-rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <polyline points="6 9 12 15 18 9" />
-                                      </svg>
+                                      <ChevronDown size={13} style={{ transition: "transform 0.2s", transform: aptCollapsed[`${pi}-${ai}`] ? "rotate(-90deg)" : "rotate(0deg)" }} />
                                     </button>
                                     <button type="button" onClick={() => removeApt(pi, ai)}
                                       className="text-xs text-zinc-400 hover:text-red-500 transition-colors px-1">Remover</button>
@@ -607,11 +613,11 @@ export default function ObrasPage() {
                                       return (
                                         <div key={ci} className="border border-zinc-100 rounded-lg p-2.5 space-y-2 bg-white">
                                           <div className="flex items-center gap-2 flex-wrap">
-                                            <select value={c.tipo} onChange={e => setComodoApt(pi, ai, ci, "tipo", e.target.value)}
+                                            <select value={c.tipo} onChange={e => updComodoApt(pi, ai, ci, c => ({...c, tipo: e.target.value}))}
                                               className="border border-zinc-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
                                               {TIPOS_COMODO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                             </select>
-                                            <input value={c.nome} onChange={e => setComodoApt(pi, ai, ci, "nome", e.target.value)}
+                                            <input value={c.nome} onChange={e => updComodoApt(pi, ai, ci, c => ({...c, nome: e.target.value}))}
                                               className={`flex-1 min-w-28 ${INPUT_SM}`} placeholder="Nome opcional" />
                                             {orc.total > 0 && <span className="text-xs font-bold text-orange-600">{fmt(orc.total)}</span>}
                                             <button type="button" onClick={() => addComodoApt(pi, ai)}
@@ -621,21 +627,51 @@ export default function ObrasPage() {
                                                 className="text-xs text-zinc-400 hover:text-red-500 border border-zinc-200 rounded-lg px-2 py-1.5 transition-colors">Remover</button>
                                             )}
                                           </div>
-                                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                                            {(["parede1_m2","parede2_m2","parede3_m2","parede4_m2"] as const).map((f, fi) => (
-                                              <div key={f}>
-                                                <label className="block text-xs text-zinc-400 mb-0.5">Parede {fi + 1} m²</label>
-                                                <input type="number" step="0.01" min="0" value={c[f]}
-                                                  onChange={e => setComodoApt(pi, ai, ci, f, e.target.value)}
-                                                  className={`w-full ${INPUT_SM}`} placeholder="0,00" />
+                                          {/* Paredes */}
+                                          <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs text-zinc-400">Paredes</span>
+                                              <button type="button" onClick={() => updComodoApt(pi, ai, ci, c => ({...c, paredes:[...c.paredes,{m2:"",cor:""}]}))}
+                                                className="text-xs text-orange-500 hover:text-orange-700">+ parede</button>
+                                            </div>
+                                            {c.paredes.map((p, pIdx) => (
+                                              <div key={pIdx} className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-xs text-zinc-300 w-12 shrink-0">Parede {pIdx+1}</span>
+                                                <input type="number" step="0.01" min="0" value={p.m2}
+                                                  onChange={e => updComodoApt(pi, ai, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],m2:e.target.value}; return {...c,paredes:ps}; })}
+                                                  className={`w-20 ${INPUT_SM}`} placeholder="m²" />
+                                                <input type="color" value={p.cor||"#ffffff"}
+                                                  onChange={e => updComodoApt(pi, ai, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],cor:e.target.value}; return {...c,paredes:ps}; })}
+                                                  className="w-7 h-7 rounded cursor-pointer border border-zinc-200 p-0.5 bg-white shrink-0" title="Cor" />
+                                                <input type="text" value={p.cor||""}
+                                                  onChange={e => updComodoApt(pi, ai, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],cor:e.target.value}; return {...c,paredes:ps}; })}
+                                                  className={`w-20 ${INPUT_SM} font-mono text-xs`} placeholder="#rrggbb" />
+                                                {c.paredes.length > 1 && (
+                                                  <button type="button" onClick={() => updComodoApt(pi, ai, ci, c => ({...c, paredes:c.paredes.filter((_,i)=>i!==pIdx)}))}
+                                                    className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                                )}
                                               </div>
                                             ))}
-                                            <div>
-                                              <label className="block text-xs text-zinc-400 mb-0.5">Teto m²</label>
-                                              <input type="number" step="0.01" min="0" value={c.teto_m2}
-                                                onChange={e => setComodoApt(pi, ai, ci, "teto_m2", e.target.value)}
-                                                className={`w-full ${INPUT_SM}`} placeholder="0,00" />
+                                          </div>
+                                          {/* Tetos */}
+                                          <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs text-zinc-400">Tetos</span>
+                                              <button type="button" onClick={() => updComodoApt(pi, ai, ci, c => ({...c, tetos:[...c.tetos,{m2:""}]}))}
+                                                className="text-xs text-orange-500 hover:text-orange-700">+ teto</button>
                                             </div>
+                                            {c.tetos.map((t, tIdx) => (
+                                              <div key={tIdx} className="flex items-center gap-1.5">
+                                                <span className="text-xs text-zinc-300 w-12 shrink-0">Teto {tIdx+1}</span>
+                                                <input type="number" step="0.01" min="0" value={t.m2}
+                                                  onChange={e => updComodoApt(pi, ai, ci, c => { const ts=[...c.tetos]; ts[tIdx]={m2:e.target.value}; return {...c,tetos:ts}; })}
+                                                  className={`w-20 ${INPUT_SM}`} placeholder="m²" />
+                                                {c.tetos.length > 1 && (
+                                                  <button type="button" onClick={() => updComodoApt(pi, ai, ci, c => ({...c, tetos:c.tetos.filter((_,i)=>i!==tIdx)}))}
+                                                    className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                                )}
+                                              </div>
+                                            ))}
                                           </div>
                                         </div>
                                       );
@@ -667,37 +703,61 @@ export default function ObrasPage() {
                               return (
                                 <div key={ci} className="border border-zinc-100 rounded-lg p-2.5 space-y-2 bg-zinc-50/50">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <select value={c.tipo} onChange={e => setComodoAvulso(pi, ci, "tipo", e.target.value)}
+                                    <select value={c.tipo} onChange={e => updComodoAvulso(pi, ci, c => ({...c, tipo: e.target.value}))}
                                       className="border border-zinc-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
                                       {TIPOS_COMODO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
-                                    <input value={c.nome} onChange={e => setComodoAvulso(pi, ci, "nome", e.target.value)}
+                                    <input value={c.nome} onChange={e => updComodoAvulso(pi, ci, c => ({...c, nome: e.target.value}))}
                                       className={`flex-1 min-w-28 ${INPUT_SM}`} placeholder="Nome opcional" />
                                     {orc.total > 0 && <span className="text-xs font-bold text-orange-600">{fmt(orc.total)}</span>}
-                                    {pav.comodos.length > 1 && (
-                                      <button type="button" onClick={() => removeComodoAvulso(pi, ci)}
-                                        className="text-xs text-zinc-400 hover:text-red-500 border border-zinc-200 rounded-lg px-2 py-1.5 transition-colors">Remover</button>
-                                    )}
-                                    {pav.comodos.length === 1 && (
-                                      <button type="button" onClick={() => removeComodoAvulso(pi, ci)}
-                                        className="text-xs text-zinc-400 hover:text-red-500 border border-zinc-200 rounded-lg px-2 py-1.5 transition-colors">Remover</button>
-                                    )}
+                                    <button type="button" onClick={() => removeComodoAvulso(pi, ci)}
+                                      className="text-xs text-zinc-400 hover:text-red-500 border border-zinc-200 rounded-lg px-2 py-1.5 transition-colors">Remover</button>
                                   </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                                    {(["parede1_m2","parede2_m2","parede3_m2","parede4_m2"] as const).map((f, fi) => (
-                                      <div key={f}>
-                                        <label className="block text-xs text-zinc-400 mb-0.5">Parede {fi + 1} m²</label>
-                                        <input type="number" step="0.01" min="0" value={c[f]}
-                                          onChange={e => setComodoAvulso(pi, ci, f, e.target.value)}
-                                          className={`w-full ${INPUT_SM}`} placeholder="0,00" />
+                                  {/* Paredes */}
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-zinc-400">Paredes</span>
+                                      <button type="button" onClick={() => updComodoAvulso(pi, ci, c => ({...c, paredes:[...c.paredes,{m2:"",cor:""}]}))}
+                                        className="text-xs text-orange-500 hover:text-orange-700">+ parede</button>
+                                    </div>
+                                    {c.paredes.map((p, pIdx) => (
+                                      <div key={pIdx} className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs text-zinc-300 w-12 shrink-0">Parede {pIdx+1}</span>
+                                        <input type="number" step="0.01" min="0" value={p.m2}
+                                          onChange={e => updComodoAvulso(pi, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],m2:e.target.value}; return {...c,paredes:ps}; })}
+                                          className={`w-20 ${INPUT_SM}`} placeholder="m²" />
+                                        <input type="color" value={p.cor||"#ffffff"}
+                                          onChange={e => updComodoAvulso(pi, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],cor:e.target.value}; return {...c,paredes:ps}; })}
+                                          className="w-7 h-7 rounded cursor-pointer border border-zinc-200 p-0.5 bg-white shrink-0" title="Cor" />
+                                        <input type="text" value={p.cor||""}
+                                          onChange={e => updComodoAvulso(pi, ci, c => { const ps=[...c.paredes]; ps[pIdx]={...ps[pIdx],cor:e.target.value}; return {...c,paredes:ps}; })}
+                                          className={`w-20 ${INPUT_SM} font-mono text-xs`} placeholder="#rrggbb" />
+                                        {c.paredes.length > 1 && (
+                                          <button type="button" onClick={() => updComodoAvulso(pi, ci, c => ({...c, paredes:c.paredes.filter((_,i)=>i!==pIdx)}))}
+                                            className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                        )}
                                       </div>
                                     ))}
-                                    <div>
-                                      <label className="block text-xs text-zinc-400 mb-0.5">Teto m²</label>
-                                      <input type="number" step="0.01" min="0" value={c.teto_m2}
-                                        onChange={e => setComodoAvulso(pi, ci, "teto_m2", e.target.value)}
-                                        className={`w-full ${INPUT_SM}`} placeholder="0,00" />
+                                  </div>
+                                  {/* Tetos */}
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-zinc-400">Tetos</span>
+                                      <button type="button" onClick={() => updComodoAvulso(pi, ci, c => ({...c, tetos:[...c.tetos,{m2:""}]}))}
+                                        className="text-xs text-orange-500 hover:text-orange-700">+ teto</button>
                                     </div>
+                                    {c.tetos.map((t, tIdx) => (
+                                      <div key={tIdx} className="flex items-center gap-1.5">
+                                        <span className="text-xs text-zinc-300 w-12 shrink-0">Teto {tIdx+1}</span>
+                                        <input type="number" step="0.01" min="0" value={t.m2}
+                                          onChange={e => updComodoAvulso(pi, ci, c => { const ts=[...c.tetos]; ts[tIdx]={m2:e.target.value}; return {...c,tetos:ts}; })}
+                                          className={`w-20 ${INPUT_SM}`} placeholder="m²" />
+                                        {c.tetos.length > 1 && (
+                                          <button type="button" onClick={() => updComodoAvulso(pi, ci, c => ({...c, tetos:c.tetos.filter((_,i)=>i!==tIdx)}))}
+                                            className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               );
@@ -736,13 +796,14 @@ export default function ObrasPage() {
 
       {/* Busca */}
       {!loading && obras.length > 0 && (
-        <div className="mb-4">
+        <div style={{ position: "relative", maxWidth: "360px", marginBottom: "16px" }}>
+          <Search size={14} style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "rgba(26,42,58,0.35)", pointerEvents: "none" }} />
           <input
-            type="search"
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
+            type="search" value={busca} onChange={e => setBusca(e.target.value)}
             placeholder="Buscar por nome, local ou empreiteira..."
-            className="w-full sm:w-80 border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow"
+            style={{ width: "100%", padding: "10px 14px 10px 36px", borderRadius: "8px", fontSize: "0.875rem", backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.14)", color: "#1A2A3A", outline: "none", boxSizing: "border-box", transition: "border-color 0.15s, box-shadow 0.15s" }}
+            onFocus={e => { e.currentTarget.style.borderColor="#1A2A3A"; e.currentTarget.style.boxShadow="0 0 0 3px rgba(26,42,58,0.08)"; }}
+            onBlur={e  => { e.currentTarget.style.borderColor="rgba(26,42,58,0.14)"; e.currentTarget.style.boxShadow="none"; }}
           />
         </div>
       )}
@@ -754,29 +815,29 @@ export default function ObrasPage() {
         ) : obrasFiltradas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-1.5">
             <p className="text-sm font-medium text-zinc-500">{busca ? "Nenhuma obra encontrada" : "Nenhuma obra cadastrada"}</p>
-            <p className="text-xs text-zinc-400">{busca ? "Tente outro termo de busca" : "Clique em \"+ Nova Obra\" para comecar"}</p>
+            <p className="text-xs text-zinc-400">{busca ? "Tente outro termo de busca" : "Clique em \"+ Nova Obra\" para começar"}</p>
           </div>
         ) : (
           <>
             {/* Mobile: cards */}
-            <div className="md:hidden divide-y divide-zinc-100">
-              {obrasFiltradas.map(o => (
-                <div key={o.id} className="px-5 py-4">
+            <div key={pagObras.animKey} className={`md:hidden divide-y divide-zinc-100 ${pagObras.animClass}`}>
+              {pagObras.pageItems.map(o => (
+                <div key={o.id} className="px-4 py-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-zinc-900 text-sm leading-snug">{o.nome}</p>
+                    <p className="font-semibold text-zinc-900 text-sm leading-snug" style={{ overflowWrap: "break-word", flex: 1 }}>{o.nome}</p>
                     {(o.orcamento_total ?? 0) > 0 && (
-                      <span className="text-sm font-bold text-orange-600 tabular-nums shrink-0">{fmt(o.orcamento_total)}</span>
+                      <span className="text-sm font-bold text-orange-600 tabular-nums shrink-0 ml-2">{fmt(o.orcamento_total)}</span>
                     )}
                   </div>
-                  {o.local && <p className="text-xs text-zinc-500 mb-0.5">{o.local}</p>}
+                  {o.local && <p className="text-xs text-zinc-500 mb-1 truncate">{o.local}</p>}
                   {nomeEmpreiteira(o) && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-100 text-zinc-600 mb-2">
                       {nomeEmpreiteira(o)}
                     </span>
                   )}
-                  <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
-                    {o.pavimentos.length > 0 && <><span>{o.pavimentos.length} pav.</span><span>·</span><span>{o.pavimentos.reduce((s, p) => s + p.comodos.length, 0)} comodos</span></>}
-                  </div>
+                  {o.pavimentos.length > 0 && (
+                    <p className="text-xs text-zinc-400 mb-3">{o.pavimentos.length} pav. · {o.pavimentos.reduce((s, p) => s + p.comodos.length, 0)} côm.</p>
+                  )}
                   <div className="flex items-center gap-3">
                     <Link href={`/orcamentos/obras/${o.id}`}
                       className="text-xs font-medium text-orange-600 hover:text-orange-700 transition-colors">
@@ -787,7 +848,7 @@ export default function ObrasPage() {
                         <span className="text-zinc-500">Excluir?</span>
                         <button onClick={() => handleDelete(o.id)} disabled={deleting}
                           className="text-red-600 font-medium hover:text-red-700 disabled:opacity-50">Sim</button>
-                        <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                        <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Não</button>
                       </span>
                     ) : (
                       <button onClick={() => setConfirmDelete(o.id)}
@@ -801,7 +862,7 @@ export default function ObrasPage() {
             </div>
 
             {/* Desktop: table */}
-            <div className="hidden md:block overflow-x-auto">
+            <div key={`d-${pagObras.animKey}`} className={`hidden md:block overflow-x-auto ${pagObras.animClass}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 bg-zinc-50">
@@ -809,16 +870,18 @@ export default function ObrasPage() {
                     <th className="text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Local</th>
                     <th className="text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Empreiteira</th>
                     <th className="text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Pav.</th>
-                    <th className="text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Comodos</th>
-                    <th className="text-right text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Orcamento</th>
+                    <th className="text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Côm.</th>
+                    <th className="text-right text-xs font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3">Orçamento</th>
                     <th className="px-6 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {obrasFiltradas.map((o, idx) => (
+                  {pagObras.pageItems.map((o, idx) => (
                     <tr key={o.id} className={`border-b border-zinc-100 last:border-0 hover:bg-zinc-50/80 transition-colors ${idx % 2 === 0 ? "" : "bg-zinc-50/30"}`}>
-                      <td className="px-6 py-4 font-semibold text-zinc-900">{o.nome}</td>
-                      <td className="px-4 py-4 text-zinc-500 text-xs">{o.local ?? <span className="text-zinc-300">—</span>}</td>
+                      <td className="px-6 py-4 font-semibold text-zinc-900 max-w-[200px]">
+                        <span style={{ display: "block", overflowWrap: "break-word" }}>{o.nome}</span>
+                      </td>
+                      <td className="px-4 py-4 text-zinc-500 text-xs max-w-[160px] truncate">{o.local ?? <span className="text-zinc-300">—</span>}</td>
                       <td className="px-4 py-4">
                         {nomeEmpreiteira(o)
                           ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-100 text-zinc-700">{nomeEmpreiteira(o)}</span>
@@ -841,7 +904,7 @@ export default function ObrasPage() {
                               <span className="text-zinc-500">Excluir?</span>
                               <button onClick={() => handleDelete(o.id)} disabled={deleting}
                                 className="text-red-600 font-medium hover:text-red-700 disabled:opacity-50">Sim</button>
-                              <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Nao</button>
+                              <button onClick={() => setConfirmDelete(null)} className="text-zinc-400 hover:text-zinc-600">Não</button>
                             </span>
                           ) : (
                             <button onClick={() => setConfirmDelete(o.id)}
@@ -855,6 +918,14 @@ export default function ObrasPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="px-4 sm:px-6 pb-4">
+              <Pagination
+                page={pagObras.page} totalPages={pagObras.totalPages}
+                from={pagObras.from} to={pagObras.to} total={pagObras.total}
+                onPrev={pagObras.goPrev} onNext={pagObras.goNext}
+              />
             </div>
           </>
         )}

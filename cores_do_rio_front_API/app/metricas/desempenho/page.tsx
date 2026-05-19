@@ -383,7 +383,7 @@ export default function DesempenhoPage() {
                 <Tooltip {...TOOLTIP_STYLE} formatter={(v, name) => [fmt(Number(v)), name === "saldo" ? "Saldo" : "Projeção"]} />
                 <Legend formatter={v => v === "saldo" ? "Saldo real" : "Projeção"} wrapperStyle={{ fontSize: 12 }} />
                 <ReferenceLine y={0} stroke="#d4d4d8" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="saldo"           stroke="#f97316" strokeWidth={2.5} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
+                <Line type="monotone" dataKey="saldo"           stroke="#1A2A3A" strokeWidth={2.5} dot={{ r: 3, fill: "#1A2A3A" }} connectNulls={false} />
                 <Line type="monotone" dataKey="saldo_projetado" stroke="#a1a1aa" strokeWidth={2}   dot={{ r: 3, fill: "#a1a1aa" }} strokeDasharray="6 3" connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -753,7 +753,7 @@ export default function DesempenhoPage() {
                     tickFormatter={v => v.toFixed(0)}
                     domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax * 1.15), 12)]}
                   />
-                  <ReferenceLine y={5}  stroke="#f97316" strokeDasharray="5 3" label={{ value: "crítico",  position: "insideTopRight", fontSize: 9, fill: "#f97316" }} />
+                  <ReferenceLine y={5}  stroke="#d97706" strokeDasharray="5 3" label={{ value: "crítico",  position: "insideTopRight", fontSize: 9, fill: "#d97706" }} />
                   <ReferenceLine y={10} stroke="#dc2626" strokeDasharray="3 2" label={{ value: "limite",   position: "insideTopRight", fontSize: 9, fill: "#dc2626" }} />
                   <Tooltip
                     {...TOOLTIP_STYLE}

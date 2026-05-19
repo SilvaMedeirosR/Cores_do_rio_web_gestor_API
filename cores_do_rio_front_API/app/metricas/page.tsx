@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+import { useWindowSize } from "@/lib/hooks/useWindowSize";
 import {
   fmt, fmtK, fmtPct,
   KpiCard, SectionTitle,
@@ -17,6 +18,7 @@ export default function MetricasPage() {
   const [obras,   setObras]   = useState<ObraMetrica[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro,    setErro]    = useState<string | null>(null);
+  const { isMobile, isXs }   = useWindowSize();
 
   useEffect(() => {
     setLoading(true);
@@ -39,8 +41,10 @@ export default function MetricasPage() {
     <div className="flex items-center justify-center py-40 text-red-500 text-sm">{erro}</div>
   );
 
+  const nomeMax    = isXs ? 9 : isMobile ? 12 : 16;
+  const yAxisW     = isXs ? 72 : isMobile ? 88 : 110;
   const dadosObras = obras.map(o => ({
-    nome:     o.nome.length > 16 ? o.nome.slice(0, 14) + "…" : o.nome,
+    nome:     o.nome.length > nomeMax ? o.nome.slice(0, nomeMax - 1) + "…" : o.nome,
     pago:     Math.round(o.valor_pago),
     pendente: Math.round(o.orcamento_total - o.valor_pago),
   }));
@@ -49,15 +53,15 @@ export default function MetricasPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-10">
 
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Métricas</h1>
-        <p className="text-zinc-400 text-sm mt-0.5">Visão geral do negócio</p>
+        <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1, marginBottom: "6px" }}>Métricas</h1>
+        <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>Visão geral do negócio</p>
       </div>
 
       {/* ── KPIs ── */}
       {resumo && (
         <section>
           <SectionTitle>Painel Geral</SectionTitle>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 kpi-grid">
             <KpiCard label="Obras"            value={String(resumo.obras.total)}           color="zinc"   />
             <KpiCard label="Cômodos"          value={String(resumo.comodos.total)}          color="zinc"   />
             <KpiCard label="Funcionários"     value={String(resumo.funcionarios.ativos)}
@@ -103,14 +107,14 @@ export default function MetricasPage() {
               <BarChart layout="vertical" data={dadosObras} margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f4f4f5" />
                 <XAxis type="number" tickFormatter={fmtK} tick={{ fontSize: 11, fill: "#a1a1aa" }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="nome" width={110} tick={{ fontSize: 11, fill: "#52525b" }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="nome" width={yAxisW} tick={{ fontSize: isXs ? 9 : 11, fill: "#52525b" }} axisLine={false} tickLine={false} />
                 <Tooltip
                   {...TOOLTIP_STYLE}
                   formatter={(v, name) => [fmt(Number(v)), name === "pago" ? "Pago" : "Pendente"]}
                 />
                 <Legend formatter={v => v === "pago" ? "Pago" : "Pendente"} wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="pago"     stackId="a" fill="#f97316" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="pendente" stackId="a" fill="#e4e4e7" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="pago"     stackId="a" fill="#1A2A3A" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="pendente" stackId="a" fill="rgba(26,42,58,0.12)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

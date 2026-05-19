@@ -5,7 +5,8 @@ export type Funcao =
   | "materiais"
   | "gerencia_financeira"
   | "desenvolvedor"
-  | "titular";
+  | "titular"
+  | "beneficios";
 
 /** Rota inicial de cada função após login */
 export const FUNCAO_HOME: Record<Funcao, string> = {
@@ -16,6 +17,7 @@ export const FUNCAO_HOME: Record<Funcao, string> = {
   gerencia_financeira: "/financeiro",
   desenvolvedor:       "/",
   titular:             "/metricas",
+  beneficios:          "/departamento-pessoal/folha",
 };
 
 /**
@@ -23,11 +25,13 @@ export const FUNCAO_HOME: Record<Funcao, string> = {
  * Lista vazia = ninguém acessa.
  */
 export const ROUTE_PERMISSIONS: { prefix: string; allowed: Funcao[] }[] = [
-  { prefix: "/orcamentos",           allowed: ["orcamentista"]                          },
-  { prefix: "/departamento-pessoal", allowed: ["rh"]                                    },
-  { prefix: "/financeiro",           allowed: ["financeiro", "gerencia_financeira"]      },
-  { prefix: "/compras",              allowed: ["materiais"]                              },
-  { prefix: "/metricas",             allowed: ["titular"]                                },
+  { prefix: "/orcamentos",                    allowed: ["orcamentista"]                                          },
+  { prefix: "/departamento-pessoal/folha",    allowed: ["rh", "beneficios"]                                     },
+  { prefix: "/departamento-pessoal",          allowed: ["rh"]                                                    },
+  { prefix: "/financeiro/folha",              allowed: ["financeiro", "gerencia_financeira"]                     },
+  { prefix: "/financeiro",                    allowed: ["financeiro", "gerencia_financeira"]                     },
+  { prefix: "/compras",                       allowed: ["materiais"]                                             },
+  { prefix: "/metricas",                      allowed: ["titular"]                                               },
 ];
 
 /** Retorna true se a função tem acesso ao pathname. */

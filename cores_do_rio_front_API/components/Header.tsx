@@ -6,153 +6,304 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { temAcesso, type Funcao } from "@/lib/auth/permissions";
 
+const FOLHA_API = process.env.NEXT_PUBLIC_API_FOLHA ?? "";
+interface Notificacao { id: string; titulo: string; corpo: string | null; tipo: string; lida: boolean; created_at: string; }
+
 const ALL_navItems = [
-  { label: "Metricas",     href: "/metricas"             },
-  { label: "Orcamentos",   href: "/orcamentos"           },
-  { label: "Compras",      href: "/compras"              },
-  { label: "Dep. Pessoal", href: "/departamento-pessoal" },
-  { label: "Financeiro",   href: "/financeiro"           },
+  { label: "Métricas",     href: "/metricas"                   },
+  { label: "Orçamentos",   href: "/orcamentos"                 },
+  { label: "Compras",      href: "/compras"                    },
+  { label: "Dep. Pessoal", href: "/departamento-pessoal"       },
+  { label: "Folha / DP",   href: "/departamento-pessoal/folha" },
+  { label: "Financeiro",   href: "/financeiro"                 },
+  { label: "Folha / Fin.", href: "/financeiro/folha"           },
 ];
 
 const FUNCAO_LABEL: Record<string, string> = {
-  orcamentista:        "Orcamentista",
+  orcamentista:        "Orçamentista",
   rh:                  "RH",
   financeiro:          "Financeiro",
   materiais:           "Materiais",
-  gerencia_financeira: "Gerencia Financeira",
+  gerencia_financeira: "Gerência Financeira",
   desenvolvedor:       "Desenvolvedor",
   titular:             "Titular",
+  beneficios:          "Benefícios",
 };
 
 interface Profile { nome: string; sobrenome: string; funcao: string; }
 
-export default function Header() {
-  const pathname   = usePathname();
-  const router     = useRouter();
-  const [open, setOpen]           = useState(false);
-  const [userOpen, setUserOpen]   = useState(false);
-  const [profile, setProfile]     = useState<Profile | null>(null);
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [funcao, setFuncao]       = useState<Funcao | null>(null);
-  const userRef = useRef<HTMLDivElement>(null);
+function CRLogo({ size = 22 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"
+      width={size} height={size} fill="#F3ECE0" aria-label="Cores do Rio"
+      style={{ display: "block", flexShrink: 0 }}>
+      <path d="M 500 110 L 90 400 L 910 400 L 500 110 Z M 500 195 L 280 350 L 720 350 L 500 195 Z" fillRule="evenodd"/>
+      <rect x="90"  y="370" width="820" height="60"/>
+      <rect x="90"  y="830" width="820" height="50"/>
+      <rect x="155" y="430" width="80"  height="400"/>
+      <rect x="335" y="430" width="80"  height="400"/>
+      <rect x="460" y="430" width="80"  height="400"/>
+      <rect x="585" y="430" width="80"  height="400"/>
+      <rect x="765" y="430" width="80"  height="400"/>
+    </svg>
+  );
+}
 
-  const navItems = funcao
-    ? ALL_navItems.filter(item => temAcesso(funcao, item.href))
-    : [];
+export default function Header() {
+  const pathname = usePathname();
+  const router   = useRouter();
+
+  const [open,      setOpen]      = useState(false);
+  const [userOpen,  setUserOpen]  = useState(false);
+  const [profile,   setProfile]   = useState<Profile | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+  const [funcao,    setFuncao]    = useState<Funcao | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs,    setNotifs]    = useState<Notificacao[]>([]);
+
+  const userRef  = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const navItems = funcao ? ALL_navItems.filter(i => temAcesso(funcao, i.href)) : [];
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    const sb = createClient();
+    sb.auth.getUser().then(({ data }) => {
       if (!data.user) return;
       setUserEmail(data.user.email ?? "");
       const f = data.user.user_metadata?.funcao as Funcao | undefined;
       if (f) setFuncao(f);
-      supabase
-        .from("profiles")
-        .select("nome, sobrenome, funcao")
-        .eq("id", data.user.id)
-        .single()
-        .then(({ data: p }) => {
-          if (p) {
-            setProfile(p);
-            setFuncao(p.funcao as Funcao);
-          }
-        });
+      sb.from("profiles").select("nome, sobrenome, funcao").eq("id", data.user.id).single()
+        .then(({ data: p }) => { if (p) { setProfile(p); setFuncao(p.funcao as Funcao); } });
     });
   }, []);
 
   useEffect(() => {
-    const handle = (e: MouseEvent) => {
-      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false);
+    const h = (e: MouseEvent) => {
+      if (userRef.current  && !userRef.current.contains(e.target as Node))  setUserOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
     };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  const fetchNotifs = async (email: string) => {
+    if (!email || !FOLHA_API) return;
+    try {
+      const r = await fetch(`${FOLHA_API}/notificacoes?destinatario=${encodeURIComponent(email)}`);
+      setNotifs((await r.json()).data ?? []);
+    } catch { /* noop */ }
+  };
+
+  useEffect(() => { if (userEmail) fetchNotifs(userEmail); }, [userEmail]);
+  useEffect(() => {
+    if (!userEmail) return;
+    const iv = setInterval(() => fetchNotifs(userEmail), 60000);
+    return () => clearInterval(iv);
+  }, [userEmail]);
+
+  const marcarTodasLidas = async () => {
+    if (!userEmail || !FOLHA_API) return;
+    await fetch(`${FOLHA_API}/notificacoes/ler`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ destinatario: userEmail }),
+    }).catch(() => {});
+    setNotifs(prev => prev.map(n => ({ ...n, lida: true })));
+  };
+
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  const unreadCount = notifs.filter(n => !n.lida).length;
+
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await createClient().auth.signOut();
     router.push("/login");
     router.refresh();
   };
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isActive = (href: string) => href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   const initials = profile
-    ? `${profile.nome.charAt(0)}${profile.sobrenome.charAt(0)}`.toUpperCase()
-    : userEmail.charAt(0).toUpperCase();
+    ? `${profile.nome[0]}${profile.sobrenome[0]}`.toUpperCase()
+    : userEmail[0]?.toUpperCase() ?? "?";
+
+  /* ─── Estilos inline (navy palette) ─── */
+  const NAV = "#1A2A3A";
+  const CRM = "#F3ECE0";
+  const navLinkBase: React.CSSProperties = {
+    padding: "6px 12px", borderRadius: "6px", fontSize: "0.8rem",
+    letterSpacing: "0.02em", transition: "all 0.15s", whiteSpace: "nowrap", textDecoration: "none",
+  };
 
   return (
-    <header className="bg-white border-b border-zinc-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+    <header style={{ backgroundColor: NAV, borderBottom: "1px solid rgba(243,236,224,0.08)", position: "sticky", top: 0, zIndex: 50 }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 clamp(0.75rem, 3vw, 1.5rem)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "56px" }}>
 
-          <Link href="/" className="flex items-center gap-2.5 shrink-0" onClick={() => setOpen(false)}>
-            <div className="w-7 h-7 bg-zinc-900 rounded-md flex items-center justify-center">
-              <span className="text-white font-bold text-xs tracking-tight">CR</span>
-            </div>
-            <span className="text-sm font-semibold text-zinc-900 tracking-tight">Cores do Rio</span>
+          {/* Logo */}
+          <Link href="/" onClick={() => setOpen(false)}
+            style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", flexShrink: 0 }}>
+            <CRLogo size={22} />
+            <span style={{
+              fontFamily: "var(--font-cormorant)", color: CRM,
+              fontSize: "1rem", letterSpacing: "0.14em", textTransform: "uppercase",
+            }}>
+              Cores do Rio
+            </span>
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-0.5">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
-                  isActive(item.href)
-                    ? "text-zinc-900 font-semibold"
-                    : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50"
-                }`}
+          <nav style={{ display: "flex", alignItems: "center", gap: "2px" }} className="hidden md:flex">
+            {navItems.map(item => (
+              <Link key={item.href} href={item.href} style={{
+                ...navLinkBase,
+                color: isActive(item.href) ? CRM : "rgba(243,236,224,0.45)",
+                fontWeight: isActive(item.href) ? 600 : 400,
+                backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.08)" : "transparent",
+              }}
+                onMouseEnter={e => { if (!isActive(item.href)) (e.currentTarget as HTMLElement).style.color = "rgba(243,236,224,0.85)"; }}
+                onMouseLeave={e => { if (!isActive(item.href)) (e.currentTarget as HTMLElement).style.color = "rgba(243,236,224,0.45)"; }}
               >
                 {item.label}
               </Link>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
-            {/* User menu */}
-            <div className="relative" ref={userRef}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+
+            {/* Notificações */}
+            {userEmail && FOLHA_API && (
+              <div style={{ position: "relative" }} ref={notifRef}>
+                <button
+                  onClick={() => { setNotifOpen(v => !v); if (!notifOpen) fetchNotifs(userEmail); }}
+                  title="Notificações"
+                  style={{
+                    position: "relative", padding: "8px", borderRadius: "8px", border: "none",
+                    backgroundColor: "transparent", color: "rgba(243,236,224,0.55)", cursor: "pointer",
+                    transition: "color 0.15s, background-color 0.15s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = CRM; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(243,236,224,0.08)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "rgba(243,236,224,0.55)"; (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                >
+                  <span className={unreadCount > 0 ? "bell-ring" : ""} style={{ display: "block" }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                  </svg>
+                  </span>
+                  {unreadCount > 0 && (
+                    <span style={{
+                      position: "absolute", top: "4px", right: "4px",
+                      minWidth: "15px", height: "15px", borderRadius: "99px",
+                      backgroundColor: "#e55", color: "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "9px", fontWeight: 700, padding: "0 3px",
+                    }}>
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="slide-up-fade" style={{
+                    position: "fixed", right: "clamp(0.75rem, 3vw, 1.5rem)", top: "calc(var(--header-h, 56px) + 6px)",
+                    width: "min(300px, calc(100vw - 1.5rem))", backgroundColor: "#fff",
+                    border: "1px solid rgba(26,42,58,0.1)",
+                    borderRadius: "12px", boxShadow: "0 8px 32px rgba(26,42,58,0.12)",
+                    overflow: "hidden", zIndex: 60,
+                  }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(26,42,58,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 600, color: NAV }}>Notificações</span>
+                      {unreadCount > 0 && (
+                        <button onClick={marcarTodasLidas} style={{ fontSize: "0.7rem", color: NAV, opacity: 0.5, border: "none", background: "none", cursor: "pointer", textDecoration: "underline" }}>
+                          Marcar todas como lidas
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+                      {notifs.length === 0 ? (
+                        <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.35)", textAlign: "center", padding: "32px 16px" }}>Sem notificações</p>
+                      ) : notifs.map(n => (
+                        <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid rgba(26,42,58,0.04)", backgroundColor: !n.lida ? "rgba(26,42,58,0.03)" : "transparent" }}>
+                          <p style={{ fontSize: "0.75rem", color: NAV, fontWeight: n.lida ? 400 : 600, lineHeight: 1.4 }}>{n.titulo}</p>
+                          {n.corpo && <p style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.45)", marginTop: "2px" }}>{n.corpo}</p>}
+                          <p style={{ fontSize: "0.62rem", color: "rgba(26,42,58,0.25)", marginTop: "4px" }}>{fmtTime(n.created_at)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Menu do utilizador */}
+            <div style={{ position: "relative" }} ref={userRef}>
               <button
                 onClick={() => setUserOpen(v => !v)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-50 transition-colors"
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  padding: "6px 10px", borderRadius: "8px", border: "none",
+                  backgroundColor: "transparent", cursor: "pointer",
+                  transition: "background-color 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(243,236,224,0.08)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"}
               >
-                <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                  <span className="text-orange-700 font-semibold text-xs">{initials}</span>
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "50%",
+                  backgroundColor: "rgba(243,236,224,0.15)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <span style={{ color: CRM, fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.05em" }}>{initials}</span>
                 </div>
-                <div className="hidden sm:block text-left">
+                <div className="hidden sm:block" style={{ textAlign: "left" }}>
                   {profile && (
-                    <p className="text-xs font-medium text-zinc-900 leading-none">{profile.nome} {profile.sobrenome}</p>
+                    <p style={{ fontSize: "0.75rem", fontWeight: 500, color: CRM, lineHeight: 1 }}>{profile.nome} {profile.sobrenome}</p>
                   )}
-                  <p className="text-xs text-zinc-400 leading-none mt-0.5">
+                  <p style={{ fontSize: "0.65rem", color: "rgba(243,236,224,0.45)", lineHeight: 1, marginTop: "3px" }}>
                     {profile ? FUNCAO_LABEL[profile.funcao] ?? profile.funcao : userEmail}
                   </p>
                 </div>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-400 hidden sm:block">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(243,236,224,0.35)" strokeWidth="2" className="hidden sm:block">
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </button>
 
               {userOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 z-50">
-                  <div className="px-4 py-3 border-b border-zinc-100">
+                <div className="slide-up-fade" style={{
+                  position: "fixed", right: "clamp(0.75rem, 3vw, 1.5rem)", top: "calc(var(--header-h, 56px) + 6px)",
+                  width: "min(210px, calc(100vw - 1.5rem))", backgroundColor: "#fff",
+                  border: "1px solid rgba(26,42,58,0.1)", borderRadius: "12px",
+                  boxShadow: "0 8px 32px rgba(26,42,58,0.12)", overflow: "hidden", zIndex: 60,
+                }}>
+                  <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(26,42,58,0.06)" }}>
+                    {profile && <p style={{ fontSize: "0.85rem", fontWeight: 600, color: NAV }}>{profile.nome} {profile.sobrenome}</p>}
+                    <p style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.4)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userEmail}</p>
                     {profile && (
-                      <p className="text-sm font-semibold text-zinc-900">{profile.nome} {profile.sobrenome}</p>
-                    )}
-                    <p className="text-xs text-zinc-400 truncate mt-0.5">{userEmail}</p>
-                    {profile && (
-                      <span className="inline-block mt-1.5 px-2 py-0.5 bg-orange-50 text-orange-700 text-xs font-medium rounded-full">
+                      <span style={{
+                        display: "inline-block", marginTop: "6px",
+                        padding: "2px 8px", borderRadius: "99px",
+                        backgroundColor: "rgba(26,42,58,0.07)", color: NAV,
+                        fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.04em",
+                      }}>
                         {FUNCAO_LABEL[profile.funcao] ?? profile.funcao}
                       </span>
                     )}
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                    style={{
+                      width: "100%", padding: "11px 16px", textAlign: "left",
+                      border: "none", background: "none", cursor: "pointer",
+                      fontSize: "0.8rem", color: "#dc2626",
+                      display: "flex", alignItems: "center", gap: "8px",
+                      transition: "background-color 0.15s",
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(220,38,38,0.05)"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                       <polyline points="16 17 21 12 16 7"/>
                       <line x1="21" y1="12" x2="9" y2="12"/>
@@ -163,18 +314,22 @@ export default function Header() {
               )}
             </div>
 
-            {/* Mobile hamburger */}
+            {/* Hambúrguer mobile */}
             <button
-              className="md:hidden p-2 rounded-md text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50 transition-colors"
+              className="md:hidden"
               onClick={() => setOpen(v => !v)}
               aria-label="Menu"
+              style={{
+                padding: "8px", borderRadius: "8px", border: "none",
+                backgroundColor: "transparent", color: "rgba(243,236,224,0.6)", cursor: "pointer",
+              }}
             >
               {open ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
                 </svg>
               )}
@@ -183,28 +338,25 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Menu mobile */}
       {open && (
-        <div className="md:hidden border-t border-zinc-100 bg-white">
-          <nav className="max-w-7xl mx-auto px-4 py-2 flex flex-col">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={`px-3 py-2.5 rounded-md text-sm transition-colors ${
-                  isActive(item.href)
-                    ? "text-zinc-900 font-semibold bg-zinc-50"
-                    : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50"
-                }`}
-              >
+        <div style={{ borderTop: "1px solid rgba(243,236,224,0.08)", backgroundColor: NAV }} className="md:hidden">
+          <nav style={{ maxWidth: "1280px", margin: "0 auto", padding: "8px 24px", display: "flex", flexDirection: "column" }}>
+            {navItems.map(item => (
+              <Link key={item.href} href={item.href} onClick={() => setOpen(false)} style={{
+                padding: "10px 12px", borderRadius: "8px", textDecoration: "none",
+                fontSize: "0.85rem", transition: "all 0.15s",
+                color: isActive(item.href) ? CRM : "rgba(243,236,224,0.5)",
+                backgroundColor: isActive(item.href) ? "rgba(243,236,224,0.08)" : "transparent",
+              }}>
                 {item.label}
               </Link>
             ))}
-            <button
-              onClick={handleLogout}
-              className="mt-1 px-3 py-2.5 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
-            >
+            <button onClick={handleLogout} style={{
+              marginTop: "4px", padding: "10px 12px", borderRadius: "8px",
+              border: "none", background: "none", cursor: "pointer",
+              fontSize: "0.85rem", color: "#f87171", textAlign: "left",
+            }}>
               Sair
             </button>
           </nav>

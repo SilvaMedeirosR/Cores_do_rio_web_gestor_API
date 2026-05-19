@@ -131,33 +131,53 @@ export function KpiCard({ label, value, sub, color = "zinc" }: {
   label: string; value: string; sub?: string;
   color?: "zinc" | "orange" | "green" | "red" | "blue";
 }) {
-  const colors: Record<string, string> = {
+  const accents: Record<string, string> = {
     zinc:   "#1A2A3A",
     orange: "#1A2A3A",
     green:  "#16a34a",
     red:    "#dc2626",
-    blue:   "#2563eb",
+    blue:   "#1d4ed8",
   };
+  const accent = accents[color];
   return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "14px", padding: "20px", boxShadow: "0 1px 4px rgba(26,42,58,0.07)" }}>
-      <p style={{ fontSize: "0.65rem", fontWeight: 600, color: "rgba(26,42,58,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>{label}</p>
-      <p style={{ fontSize: "1.5rem", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: colors[color] }}>{value}</p>
-      {sub && <p style={{ fontSize: "0.7rem", color: "rgba(26,42,58,0.4)", marginTop: "2px" }}>{sub}</p>}
+    <div style={{
+      backgroundColor: "#fff",
+      border: "1px solid rgba(26,42,58,0.09)",
+      borderTop: `2px solid ${accent}`,
+      borderRadius: "12px",
+      padding: "16px 18px 18px",
+      boxShadow: "0 1px 3px rgba(26,42,58,0.05)",
+    }}>
+      <p style={{ fontSize: "0.6rem", fontWeight: 700, color: "rgba(26,42,58,0.38)", letterSpacing: "0.13em", textTransform: "uppercase", marginBottom: "6px" }}>{label}</p>
+      <p style={{ fontSize: "1.6rem", fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1, color: accent, letterSpacing: "-0.02em" }}>{value}</p>
+      {sub && <p style={{ fontSize: "0.67rem", color: "rgba(26,42,58,0.38)", marginTop: "5px" }}>{sub}</p>}
     </div>
   );
 }
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 style={{ fontSize: "0.65rem", fontWeight: 600, color: "rgba(26,42,58,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "16px" }}>{children}</h2>
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+      <span style={{ display: "block", width: "3px", height: "12px", backgroundColor: "#1A2A3A", borderRadius: "2px", opacity: 0.2, flexShrink: 0 }} />
+      <h2 style={{ fontSize: "0.67rem", fontWeight: 700, color: "rgba(26,42,58,0.48)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{children}</h2>
+    </div>
   );
 }
 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.10)", borderRadius: "14px", padding: "20px", boxShadow: "0 1px 4px rgba(26,42,58,0.07)" }}>
-      <p style={{ fontSize: "0.7rem", fontWeight: 500, color: "rgba(26,42,58,0.4)", marginBottom: "12px" }}>{title}</p>
-      {children}
+    <div style={{
+      backgroundColor: "#fff",
+      border: "1px solid rgba(26,42,58,0.09)",
+      borderRadius: "12px",
+      boxShadow: "0 1px 3px rgba(26,42,58,0.05)",
+    }}>
+      <div style={{ padding: "11px 18px", borderBottom: "1px solid rgba(26,42,58,0.06)" }}>
+        <p style={{ fontSize: "0.67rem", fontWeight: 600, color: "rgba(26,42,58,0.42)", letterSpacing: "0.04em" }}>{title}</p>
+      </div>
+      <div style={{ padding: "16px 18px" }}>
+        {children}
+      </div>
     </div>
   );
 }

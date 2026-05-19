@@ -6,7 +6,7 @@ import {
 import { useWindowSize } from "@/lib/hooks/useWindowSize";
 import {
   fmt, fmtK, fmtPct,
-  KpiCard, SectionTitle,
+  KpiCard, SectionTitle, ChartCard,
   TOOLTIP_STYLE,
   type Resumo, type ObraMetrica,
 } from "./_shared";
@@ -79,18 +79,20 @@ export default function MetricasPage() {
           </div>
 
           {/* Progresso geral */}
-          <div className="mt-4 bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-zinc-700">Progresso Geral das Obras</span>
-              <span className="text-sm font-bold text-orange-600">{fmtPct(resumo.orcamento.progresso_pct)}</span>
+          <div style={{ marginTop: "12px", backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.09)", borderRadius: "12px", padding: "16px 18px", boxShadow: "0 1px 3px rgba(26,42,58,0.05)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(26,42,58,0.65)" }}>Progresso Geral das Obras</span>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1A2A3A", fontVariantNumeric: "tabular-nums" }}>{fmtPct(resumo.orcamento.progresso_pct)}</span>
             </div>
-            <div className="h-3 bg-zinc-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-orange-500 rounded-full transition-all duration-700"
-                style={{ width: `${resumo.orcamento.progresso_pct}%` }}
-              />
+            <div style={{ height: "8px", backgroundColor: "rgba(26,42,58,0.07)", borderRadius: "99px", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: "99px",
+                transition: "width 0.7s ease",
+                width: `${resumo.orcamento.progresso_pct}%`,
+                backgroundColor: resumo.orcamento.progresso_pct >= 100 ? "#16a34a" : "#1A2A3A",
+              }} />
             </div>
-            <div className="flex justify-between text-xs text-zinc-400 mt-1.5">
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "rgba(26,42,58,0.38)", marginTop: "6px" }}>
               <span>{fmt(resumo.orcamento.pago)} pago</span>
               <span>{fmt(resumo.orcamento.pendente)} pendente</span>
             </div>
@@ -101,8 +103,7 @@ export default function MetricasPage() {
       {/* ── Orçamento por Obra ── */}
       {dadosObras.length > 0 && (
         <section>
-          <SectionTitle>Orçamento por Obra (pago vs pendente)</SectionTitle>
-          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm">
+          <ChartCard title="Orçamento por Obra — pago vs pendente">
             <ResponsiveContainer width="100%" height={Math.max(220, dadosObras.length * 42)}>
               <BarChart layout="vertical" data={dadosObras} margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f4f4f5" />
@@ -117,7 +118,7 @@ export default function MetricasPage() {
                 <Bar dataKey="pendente" stackId="a" fill="rgba(26,42,58,0.12)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </section>
       )}
 
@@ -125,7 +126,7 @@ export default function MetricasPage() {
       {obras.length > 0 && (
         <section>
           <SectionTitle>Progresso por Obra</SectionTitle>
-          <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+          <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.09)", borderRadius: "12px", boxShadow: "0 1px 3px rgba(26,42,58,0.05)", overflow: "hidden" }}>
             <div className="divide-y divide-zinc-100">
               {obras.map(o => (
                 <div key={o.id} className="px-5 py-4">
@@ -142,15 +143,15 @@ export default function MetricasPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-700 ${
-                          o.progresso_pct === 100 ? "bg-emerald-500" : "bg-orange-500"
-                        }`}
-                        style={{ width: `${o.progresso_pct}%` }}
-                      />
+                    <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(26,42,58,0.07)" }}>
+                      <div style={{
+                        height: "100%", borderRadius: "9999px",
+                        transition: "width 0.7s ease",
+                        width: `${o.progresso_pct}%`,
+                        backgroundColor: o.progresso_pct >= 100 ? "#16a34a" : "#1A2A3A",
+                      }} />
                     </div>
-                    <span className="text-xs font-semibold text-zinc-500 tabular-nums w-8 text-right">
+                    <span className="text-xs font-semibold tabular-nums w-8 text-right" style={{ color: "rgba(26,42,58,0.5)" }}>
                       {fmtPct(o.progresso_pct)}
                     </span>
                   </div>

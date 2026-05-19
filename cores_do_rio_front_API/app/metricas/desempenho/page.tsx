@@ -499,7 +499,7 @@ export default function DesempenhoPage() {
             <div className="flex items-center gap-1.5 text-sm mb-4">
               <button
                 onClick={() => { setNivel('anual'); setAnoSel(null); setSemSel(null); }}
-                className={nivel === 'anual' ? 'font-bold text-zinc-900' : 'text-orange-600 hover:underline'}
+                className={nivel === 'anual' ? 'font-bold text-zinc-900' : 'text-zinc-500 hover:text-zinc-900 hover:underline'}
               >Anos</button>
 
               {(nivel === 'semestral' || nivel === 'quinzenal') && (
@@ -507,7 +507,7 @@ export default function DesempenhoPage() {
                   <span className="text-zinc-400">/</span>
                   <button
                     onClick={() => { setNivel('semestral'); setSemSel(null); }}
-                    className={nivel === 'semestral' ? 'font-bold text-zinc-900' : 'text-orange-600 hover:underline'}
+                    className={nivel === 'semestral' ? 'font-bold text-zinc-900' : 'text-zinc-500 hover:text-zinc-900 hover:underline'}
                   >{anoSel}</button>
                 </>
               )}
@@ -526,7 +526,7 @@ export default function DesempenhoPage() {
                   <button
                     key={a}
                     onClick={() => { setAnoSel(Number(a)); setNivel('semestral'); }}
-                    className="px-4 py-1.5 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:border-orange-400 hover:text-orange-600 transition-colors shadow-sm"
+                    className="px-4 py-1.5 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:border-zinc-400 hover:text-zinc-900 transition-colors shadow-sm"
                   >
                     {a} — ver semestres →
                   </button>
@@ -539,7 +539,7 @@ export default function DesempenhoPage() {
                   <button
                     key={s}
                     onClick={() => { setSemSel(s as 1 | 2); setNivel('quinzenal'); setMesesSel(6); }}
-                    className="px-4 py-1.5 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:border-orange-400 hover:text-orange-600 transition-colors shadow-sm"
+                    className="px-4 py-1.5 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:border-zinc-400 hover:text-zinc-900 transition-colors shadow-sm"
                   >
                     S{s}/{String(anoSel).slice(2)} — ver quinzenais →
                   </button>

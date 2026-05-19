@@ -260,6 +260,11 @@ export default function RotinaPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
 
+      <div>
+        <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1, marginBottom: "6px" }}>Rotina</h1>
+        <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>Workflow de folha e passagens</p>
+      </div>
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-zinc-200 mb-6">
         {(["rotina", "arquivos"] as const).map(t => (
@@ -268,7 +273,7 @@ export default function RotinaPage() {
             onClick={() => setAba(t)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
               aba === t
-                ? "border-orange-500 text-orange-600"
+                ? "border-[#1A2A3A] text-[#1A2A3A]"
                 : "border-transparent text-zinc-500 hover:text-zinc-700"
             }`}
           >
@@ -281,17 +286,23 @@ export default function RotinaPage() {
         <>
           {/* KPIs resumo */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm text-center">
-              <p className="text-2xl font-bold text-green-600">{totalConcluidas}</p>
-              <p className="text-xs text-zinc-400 mt-0.5 uppercase tracking-wide">Concluídas</p>
+            <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.09)", borderTop: "2px solid #16a34a", borderRadius: "12px", padding: "16px 18px", boxShadow: "0 1px 3px rgba(26,42,58,0.05)", textAlign: "center" }}>
+              <p style={{ fontSize: "1.9rem", fontWeight: 700, color: "#16a34a", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{totalConcluidas}</p>
+              <p style={{ fontSize: "0.6rem", fontWeight: 700, color: "rgba(26,42,58,0.38)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "6px" }}>Concluídas</p>
             </div>
-            <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm text-center">
-              <p className="text-2xl font-bold text-yellow-500">{totalPendentes}</p>
-              <p className="text-xs text-zinc-400 mt-0.5 uppercase tracking-wide">Pendentes</p>
+            <div style={{ backgroundColor: "#fff", border: "1px solid rgba(26,42,58,0.09)", borderTop: "2px solid #d97706", borderRadius: "12px", padding: "16px 18px", boxShadow: "0 1px 3px rgba(26,42,58,0.05)", textAlign: "center" }}>
+              <p style={{ fontSize: "1.9rem", fontWeight: 700, color: "#d97706", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{totalPendentes}</p>
+              <p style={{ fontSize: "0.6rem", fontWeight: 700, color: "rgba(26,42,58,0.38)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "6px" }}>Pendentes</p>
             </div>
-            <div className={`border rounded-xl p-4 shadow-sm text-center ${totalAtrasadas > 0 ? "bg-red-50 border-red-200" : "bg-white border-zinc-200"}`}>
-              <p className={`text-2xl font-bold ${totalAtrasadas > 0 ? "text-red-600" : "text-zinc-300"}`}>{totalAtrasadas}</p>
-              <p className="text-xs text-zinc-400 mt-0.5 uppercase tracking-wide">Atrasadas</p>
+            <div style={{
+              backgroundColor: totalAtrasadas > 0 ? "rgba(239,68,68,0.04)" : "#fff",
+              border: `1px solid ${totalAtrasadas > 0 ? "rgba(239,68,68,0.18)" : "rgba(26,42,58,0.09)"}`,
+              borderTop: `2px solid ${totalAtrasadas > 0 ? "#dc2626" : "rgba(26,42,58,0.12)"}`,
+              borderRadius: "12px", padding: "16px 18px",
+              boxShadow: "0 1px 3px rgba(26,42,58,0.05)", textAlign: "center",
+            }}>
+              <p style={{ fontSize: "1.9rem", fontWeight: 700, color: totalAtrasadas > 0 ? "#dc2626" : "rgba(26,42,58,0.18)", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{totalAtrasadas}</p>
+              <p style={{ fontSize: "0.6rem", fontWeight: 700, color: "rgba(26,42,58,0.38)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "6px" }}>Atrasadas</p>
             </div>
           </div>
 
@@ -416,7 +427,7 @@ export default function RotinaPage() {
                             href={a.arquivo_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 hover:border-orange-400 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                            className="shrink-0 flex items-center gap-1.5 text-xs font-medium border border-zinc-200 hover:border-zinc-400 text-zinc-700 hover:text-zinc-900 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>

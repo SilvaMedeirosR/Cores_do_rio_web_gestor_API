@@ -243,9 +243,24 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* ── Mobile nav strip — esconde scrollbar ───────────────────────── */
+/* ── Desktop nav — só aparece em desktop ───────────────────────── */
+.cr-nav-desktop {
+  display: none;  /* oculto em mobile */
+}
+@media (min-width: 768px) {
+  .cr-nav-desktop { display: flex; }
+}
+
+/* ── Mobile nav strip — só aparece em mobile, sem scrollbar ─────── */
+.cr-nav-strip {
+  display: none;           /* oculto por padrão (desktop) */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+@media (max-width: 767px) {
+  .cr-nav-strip { display: flex; }  /* visível apenas em mobile */
+}
 .cr-nav-strip::-webkit-scrollbar { display: none; }
-.cr-nav-strip { scrollbar-width: none; -ms-overflow-style: none; }
 
 /* ── Interatividade global ───────────────────────────────────────── */
 

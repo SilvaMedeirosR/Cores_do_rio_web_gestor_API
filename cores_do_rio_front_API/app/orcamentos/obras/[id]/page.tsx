@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronRight, Pencil, Trash2, Plus } from "lucide-react";
+import { toastSuccess } from "@/lib/toast";
 
 const API  = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"];
@@ -51,7 +52,7 @@ export default function ObraDetailPage() {
     setDeletingObra(true);
     try {
       const r = await fetch(`${API}/obras/${id}`, { method: "DELETE" });
-      if (r.ok) router.push("/orcamentos/obras");
+      if (r.ok) { toastSuccess("Obra excluída."); router.push("/orcamentos/obras"); }
     } finally { setDeletingObra(false); }
   };
 
@@ -59,7 +60,7 @@ export default function ObraDetailPage() {
     setDeletingPav(true);
     try {
       const r = await fetch(`${API}/pavimentos/${pavId}`, { method: "DELETE" });
-      if (r.ok) { setConfirmDeletePav(null); await fetchObra(); }
+      if (r.ok) { toastSuccess("Pavimento excluído."); setConfirmDeletePav(null); await fetchObra(); }
     } finally { setDeletingPav(false); }
   };
 
@@ -72,6 +73,7 @@ export default function ObraDetailPage() {
         body: JSON.stringify({ nome: newPavNome, numero: parseInt(newPavNum) || 0 }),
       });
       if (!r.ok) { const j = await r.json(); setErroPav(j.error ?? "Erro ao adicionar"); return; }
+      toastSuccess("Pavimento adicionado!");
       setNewPavNome(""); setNewPavNum(""); setAddingPav(false);
       await fetchObra();
     } catch { setErroPav("Erro de conexão"); } finally { setSubPav(false); }

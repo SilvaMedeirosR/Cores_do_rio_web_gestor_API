@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Plus, Search, ChevronDown, X as XIcon, Trash2 } from "lucide-react";
+import { toastSuccess, toastError } from "@/lib/toast";
 import { usePagination } from "@/lib/hooks/usePagination";
 import Pagination from "@/components/Pagination";
 
@@ -376,9 +377,10 @@ export default function ObrasPage() {
         })),
       };
       const r = await fetch(`${API}/obras`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!r.ok) { const j = await r.json(); setErro(j.error ?? "Erro ao salvar"); return; }
+      if (!r.ok) { const j = await r.json(); toastError(j.error ?? "Erro ao salvar"); setErro(j.error ?? "Erro ao salvar"); return; }
+      toastSuccess("Obra criada com sucesso!");
       setForm(emptyForm()); setShowForm(false); await fetchObras();
-    } catch { setErro("Erro de conexão com a API"); } finally { setSub(false); }
+    } catch { toastError("Erro de conexão com a API"); setErro("Erro de conexão com a API"); } finally { setSub(false); }
   };
 
   const handleDelete = async (obraId: string) => {
@@ -386,6 +388,7 @@ export default function ObrasPage() {
     try {
       const r = await fetch(`${API}/obras/${obraId}`, { method: "DELETE" });
       if (r.ok) {
+        toastSuccess("Obra excluída.");
         setConfirmDelete(null);
         setObras(prev => prev.filter(o => o.id !== obraId));
       }

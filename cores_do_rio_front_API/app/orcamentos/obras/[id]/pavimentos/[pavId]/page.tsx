@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronRight, Pencil, Trash2, Plus } from "lucide-react";
+import { toastSuccess } from "@/lib/toast";
 
 const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 const ETAPAS = ["massa_parede","massa_teto","lixacao","pintura","acabamento"];
@@ -115,7 +116,7 @@ export default function PavimentoDetailPage() {
         method:"PUT", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ nome:editNome, numero:parseInt(editNum)||0 }),
       });
-      if (r.ok) { setEditingPav(false); await fetchPav(); }
+      if (r.ok) { toastSuccess("Pavimento salvo!"); setEditingPav(false); await fetchPav(); }
     } finally { setSavingPav(false); }
   };
 
@@ -123,7 +124,7 @@ export default function PavimentoDetailPage() {
     setDeletingPav(true);
     try {
       const r = await fetch(`${API}/pavimentos/${pavId}`, { method:"DELETE" });
-      if (r.ok) router.push(`/orcamentos/obras/${id}`);
+      if (r.ok) { toastSuccess("Pavimento excluído."); router.push(`/orcamentos/obras/${id}`); }
     } finally { setDeletingPav(false); }
   };
 
@@ -141,6 +142,7 @@ export default function PavimentoDetailPage() {
         }),
       });
       if (!r.ok) { const j = await r.json(); setErroApt(j.error ?? "Erro"); return; }
+      toastSuccess("Apartamento adicionado!");
       setAptForm(emptyAptForm()); setAddingApt(false); await fetchPav();
     } catch { setErroApt("Erro de conexão"); } finally { setSubApt(false); }
   };
@@ -160,6 +162,7 @@ export default function PavimentoDetailPage() {
           tipo_id:editAptForm.tipo_id || null,
         }),
       });
+      toastSuccess("Apartamento salvo!");
       setEditingApt(null); await fetchPav();
     } catch {}
   };
@@ -168,7 +171,7 @@ export default function PavimentoDetailPage() {
     setDeletingApt(true);
     try {
       const r = await fetch(`${API}/apartamentos/${aptId}`, { method:"DELETE" });
-      if (r.ok) { setConfirmDelApt(null); await fetchPav(); }
+      if (r.ok) { toastSuccess("Apartamento excluído."); setConfirmDelApt(null); await fetchPav(); }
     } finally { setDeletingApt(false); }
   };
 
@@ -182,6 +185,7 @@ export default function PavimentoDetailPage() {
         body: JSON.stringify({ origem_id: origemId, manter_medidas: manterMedidas }),
       });
       if (!r.ok) { const j = await r.json(); setErroClone(j.error ?? "Erro"); return; }
+      toastSuccess("Pavimento clonado com sucesso!");
       setClonando(false); setOrigemId(""); setManterMedidas(false);
       await fetchPav();
     } catch { setErroClone("Erro de conexão"); } finally { setSubClone(false); }
@@ -219,6 +223,7 @@ export default function PavimentoDetailPage() {
         }),
       });
       if (!r.ok) { const j = await r.json(); setErroCom(j.error ?? "Erro"); return; }
+      toastSuccess("Cômodo adicionado!");
       setNewCom(emptyComodoForm()); setAddingCom(false); await fetchPav();
     } catch { setErroCom("Erro de conexão"); } finally { setSubCom(false); }
   };
@@ -235,6 +240,7 @@ export default function PavimentoDetailPage() {
         }),
       });
       if (!r.ok) { const j = await r.json(); setErroComApt(j.error ?? "Erro"); return; }
+      toastSuccess("Cômodo adicionado!");
       setNewComApt(emptyComodoForm()); setAddingComApt(null); await fetchPav();
     } catch { setErroComApt("Erro de conexão"); } finally { setSubComApt(false); }
   };
@@ -243,7 +249,7 @@ export default function PavimentoDetailPage() {
     setDeletingCom(true);
     try {
       const r = await fetch(`${API}/comodos/${comId}`, { method:"DELETE" });
-      if (r.ok) { setConfirmDelCom(null); await fetchPav(); }
+      if (r.ok) { toastSuccess("Cômodo excluído."); setConfirmDelCom(null); await fetchPav(); }
     } finally { setDeletingCom(false); }
   };
 

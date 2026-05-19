@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { toastSuccess } from "@/lib/toast";
 
 const API = process.env.NEXT_PUBLIC_API_ORCAMENTO ?? "";
 
@@ -69,6 +70,7 @@ export default function ObraEditarPage() {
         body: JSON.stringify(payload),
       });
       if (!r.ok) { const j = await r.json(); setErro(j.error ?? "Erro ao salvar"); return; }
+      toastSuccess("Alterações salvas com sucesso!");
       router.push(`/orcamentos/obras/${id}`);
     } catch { setErro("Erro de conexão com a API"); } finally { setSub(false); }
   };

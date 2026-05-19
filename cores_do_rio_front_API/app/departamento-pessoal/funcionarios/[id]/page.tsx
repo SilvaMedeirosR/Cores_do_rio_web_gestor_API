@@ -2,6 +2,7 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 const API = process.env.NEXT_PUBLIC_API_DEP_PESS ?? "";
 // v2
@@ -277,8 +278,7 @@ export default function FuncionarioPage({ params }: { params: Promise<{ id: stri
       setRaw(j.data);
       setForm(dataToForm(j.data));
       setEditando(false);
-      setSucesso("Dados salvos com sucesso!");
-      setTimeout(() => setSucesso(null), 3000);
+      toastSuccess("Dados salvos com sucesso!");
     } catch {
       setErro("Erro de conexão.");
     } finally {
@@ -298,6 +298,7 @@ export default function FuncionarioPage({ params }: { params: Promise<{ id: stri
       const j = await r.json();
       setRaw(j.data);
       if (form) setForm(f => f ? { ...f } : f);
+      toastSuccess(novoStatus === "ativo" ? "Funcionário ativado." : "Funcionário desativado.");
     }
   };
 
@@ -357,6 +358,7 @@ export default function FuncionarioPage({ params }: { params: Promise<{ id: stri
       });
       const j = await r.json();
       if (!r.ok) { setErroAlt(j.error ?? "Erro ao registrar."); setSavingAlt(false); return; }
+      toastSuccess("Alteração registrada com sucesso.");
       setModalAlt(false);
       setAltForm(DEFAULT_ALT);
       // Atualiza raw para refletir os campos alterados na UI
@@ -377,12 +379,13 @@ export default function FuncionarioPage({ params }: { params: Promise<{ id: stri
       const r = await fetch(`${API}/dominio/eventos/s2206/${alteracaoId}`, { method: "POST" });
       const j = await r.json();
       if (!r.ok) {
-        alert(j.error ?? "Erro ao enviar ao Domínio.");
+        toastError(j.error ?? "Erro ao enviar ao Domínio.");
       } else {
+        toastSuccess("Enviado ao Domínio com sucesso!");
         carregarAlteracoes();
       }
     } catch {
-      alert("Erro de conexão ao enviar ao Domínio.");
+      toastError("Erro de conexão ao enviar ao Domínio.");
     } finally {
       setEnviandoId(null);
     }

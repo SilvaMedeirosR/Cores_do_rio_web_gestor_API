@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 const API            = process.env.NEXT_PUBLIC_API_FOLHA ?? "";
 const SUPABASE_BUCKET = "folha-confirmacoes";
@@ -97,8 +98,9 @@ function ConfirmarModal({ etapa, userEmail, onClose, onDone }: {
         body: JSON.stringify({ confirmado_por: userEmail, arquivo_nome: nome, arquivo_url: url }),
       });
       if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error ?? `HTTP ${r.status}`); }
+      toastSuccess("Etapa confirmada com sucesso!");
       onDone();
-    } catch (e) { setErro(e instanceof Error ? e.message : "Erro."); }
+    } catch (e) { toastError(e instanceof Error ? e.message : "Erro."); setErro(e instanceof Error ? e.message : "Erro."); }
     finally      { setLoading(false); }
   };
 
@@ -152,8 +154,9 @@ function JustificarModal({ etapa, userEmail, onClose, onDone }: {
         body: JSON.stringify({ justificativa: texto.trim(), justificado_por: userEmail }),
       });
       if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error ?? `HTTP ${r.status}`); }
+      toastSuccess("Justificativa enviada com sucesso!");
       onDone();
-    } catch (e) { setErro(e instanceof Error ? e.message : "Erro."); }
+    } catch (e) { toastError(e instanceof Error ? e.message : "Erro."); setErro(e instanceof Error ? e.message : "Erro."); }
     finally      { setLoading(false); }
   };
 

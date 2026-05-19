@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 const API = process.env.NEXT_PUBLIC_API_DEP_PESS ?? "";
 
@@ -131,7 +132,8 @@ export default function NovoFuncionarioPage() {
         body: JSON.stringify(payload),
       });
       const j = await r.json();
-      if (!r.ok) { setErro(j.error ?? "Erro ao cadastrar."); setLoading(false); return; }
+      if (!r.ok) { toastError(j.error ?? "Erro ao cadastrar."); setErro(j.error ?? "Erro ao cadastrar."); setLoading(false); return; }
+      toastSuccess("Funcionário cadastrado com sucesso!");
       router.push(`/departamento-pessoal/funcionarios/${j.data.id}`);
     } catch {
       setErro("Erro de conexão com a API.");

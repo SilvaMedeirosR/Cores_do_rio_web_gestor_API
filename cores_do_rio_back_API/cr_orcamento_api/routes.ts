@@ -13,13 +13,24 @@ export interface Route { method: string; path: string; handler: RouteHandler; }
 
 type PrecoMap = Record<string, number>;
 
-function calcComodo(c: {
-  parede1_m2: unknown; parede2_m2: unknown; parede3_m2: unknown; parede4_m2: unknown; teto_m2: unknown;
-}, precos: PrecoMap) {
-  const p1 = Number(c.parede1_m2), p2 = Number(c.parede2_m2);
-  const p3 = Number(c.parede3_m2), p4 = Number(c.parede4_m2);
-  const totalParedes = p1 + p2 + p3 + p4;
-  const teto         = Number(c.teto_m2);
+type ParedeItem = { m2: number; cor?: string | null };
+type TetoItem   = { m2: number };
+
+function somarParedes(c: { paredes?: unknown; parede1_m2?: unknown; parede2_m2?: unknown; parede3_m2?: unknown; parede4_m2?: unknown }): number {
+  const arr = Array.isArray(c.paredes) ? c.paredes as ParedeItem[] : [];
+  if (arr.length > 0) return arr.reduce((s, p) => s + Number(p.m2), 0);
+  return Number(c.parede1_m2 ?? 0) + Number(c.parede2_m2 ?? 0) + Number(c.parede3_m2 ?? 0) + Number(c.parede4_m2 ?? 0);
+}
+
+function somarTetos(c: { tetos?: unknown; teto_m2?: unknown }): number {
+  const arr = Array.isArray(c.tetos) ? c.tetos as TetoItem[] : [];
+  if (arr.length > 0) return arr.reduce((s, t) => s + Number(t.m2), 0);
+  return Number(c.teto_m2 ?? 0);
+}
+
+function calcComodo(c: Record<string, unknown>, precos: PrecoMap) {
+  const totalParedes = somarParedes(c);
+  const teto         = somarTetos(c);
   const totalArea    = totalParedes + teto;
   const orc = {
     massa_parede: totalParedes * (precos.massa_parede ?? 0),
@@ -29,7 +40,7 @@ function calcComodo(c: {
     acabamento:   totalArea    * (precos.acabamento    ?? 0),
   };
   const total = Object.values(orc).reduce((a, b) => a + b, 0);
-  return { ...orc, total, total_paredes: totalParedes };
+  return { ...orc, total, total_paredes: totalParedes, total_tetos: teto };
 }
 
 function buildPrecoMap(obra_precos: { etapa: string; preco_m2: unknown }[]): PrecoMap {
@@ -425,39 +436,31 @@ async function clonarPavimento(req: VercelRequest, res: VercelResponse, params: 
   if (!origem) return res.status(404).json({ error: 'Pavimento de origem nao encontrado' });
 
   await prisma.$transaction(async (tx) => {
+    const zerarMedidas = { paredes: [] as never, tetos: [] as never, parede1_m2: 0, parede2_m2: 0, parede3_m2: 0, parede4_m2: 0, teto_m2: 0 };
     // cômodos avulsos
     for (const c of origem.comodos) {
       await tx.comodos.create({
         data: {
           pavimento_id: params.id, tipo: c.tipo, nome: c.nome ?? null,
-          parede1_m2: manter_medidas ? c.parede1_m2 : 0,
-          parede2_m2: manter_medidas ? c.parede2_m2 : 0,
-          parede3_m2: manter_medidas ? c.parede3_m2 : 0,
-          parede4_m2: manter_medidas ? c.parede4_m2 : 0,
-          teto_m2:    manter_medidas ? c.teto_m2    : 0,
+          ...(manter_medidas
+            ? { paredes: c.paredes as never, tetos: c.tetos as never, parede1_m2: c.parede1_m2, parede2_m2: c.parede2_m2, parede3_m2: c.parede3_m2, parede4_m2: c.parede4_m2, teto_m2: c.teto_m2 }
+            : zerarMedidas),
         },
       });
     }
     // apartamentos
     for (const apt of origem.apartamentos) {
       const novoApt = await tx.apartamentos.create({
-        data: {
-          pavimento_id: params.id,
-          tipo_id:      apt.tipo_id ?? null,
-          nome:         apt.nome    ?? null,
-          numero:       apt.numero  ?? null,
-        },
+        data: { pavimento_id: params.id, tipo_id: apt.tipo_id ?? null, nome: apt.nome ?? null, numero: apt.numero ?? null },
       });
       for (const c of apt.comodos) {
         await tx.comodos.create({
           data: {
             pavimento_id: params.id, apartamento_id: novoApt.id,
             tipo: c.tipo, nome: c.nome ?? null,
-            parede1_m2: manter_medidas ? c.parede1_m2 : 0,
-            parede2_m2: manter_medidas ? c.parede2_m2 : 0,
-            parede3_m2: manter_medidas ? c.parede3_m2 : 0,
-            parede4_m2: manter_medidas ? c.parede4_m2 : 0,
-            teto_m2:    manter_medidas ? c.teto_m2    : 0,
+            ...(manter_medidas
+              ? { paredes: c.paredes as never, tetos: c.tetos as never, parede1_m2: c.parede1_m2, parede2_m2: c.parede2_m2, parede3_m2: c.parede3_m2, parede4_m2: c.parede4_m2, teto_m2: c.teto_m2 }
+              : zerarMedidas),
           },
         });
       }
@@ -584,13 +587,18 @@ async function adicionarComodo(req: VercelRequest, res: VercelResponse, params: 
     pavimento_id = pav.id;
   }
 
+  const paredes: ParedeItem[] = Array.isArray(b.paredes) ? b.paredes : [];
+  const tetos:   TetoItem[]   = Array.isArray(b.tetos)   ? b.tetos   : [];
+  const totalPar = paredes.reduce((s, p) => s + Number(p.m2), 0);
+
   const data = await prisma.comodos.create({
     data: {
       pavimento_id, apartamento_id,
       tipo: b.tipo as never, nome: b.nome ?? null,
-      parede1_m2: b.parede1_m2 ?? 0, parede2_m2: b.parede2_m2 ?? 0,
-      parede3_m2: b.parede3_m2 ?? 0, parede4_m2: b.parede4_m2 ?? 0,
-      teto_m2:    b.teto_m2    ?? 0,
+      paredes: paredes as never,
+      tetos:   tetos   as never,
+      parede1_m2: totalPar, parede2_m2: 0, parede3_m2: 0, parede4_m2: 0,
+      teto_m2: tetos.reduce((s, t) => s + Number(t.m2), 0),
     },
   });
   return res.status(201).json({ message: 'Comodo adicionado', data });
@@ -600,18 +608,33 @@ async function atualizarComodo(req: VercelRequest, res: VercelResponse, params: 
   const b = req.body ?? {};
   const comodo = await prisma.comodos.findUnique({ where: { id: params.id } });
   if (!comodo) return res.status(404).json({ error: 'Comodo nao encontrado' });
+  const updateData: Record<string, unknown> = {};
+  if (b.tipo)       updateData.tipo       = b.tipo;
+  if ('nome' in b)  updateData.nome       = b.nome || null;
+  if (b.etapa_atual) updateData.etapa_atual = b.etapa_atual;
+
+  if (Array.isArray(b.paredes)) {
+    const paredes = b.paredes as ParedeItem[];
+    const tetos   = Array.isArray(b.tetos) ? b.tetos as TetoItem[] : undefined;
+    updateData.paredes    = paredes;
+    updateData.parede1_m2 = paredes.reduce((s, p) => s + Number(p.m2), 0);
+    updateData.parede2_m2 = 0; updateData.parede3_m2 = 0; updateData.parede4_m2 = 0;
+    if (tetos !== undefined) {
+      updateData.tetos   = tetos;
+      updateData.teto_m2 = tetos.reduce((s, t) => s + Number(t.m2), 0);
+    }
+  } else {
+    // Legacy: individual fields
+    if (b.parede1_m2 !== undefined) updateData.parede1_m2 = Number(b.parede1_m2);
+    if (b.parede2_m2 !== undefined) updateData.parede2_m2 = Number(b.parede2_m2);
+    if (b.parede3_m2 !== undefined) updateData.parede3_m2 = Number(b.parede3_m2);
+    if (b.parede4_m2 !== undefined) updateData.parede4_m2 = Number(b.parede4_m2);
+    if (b.teto_m2    !== undefined) updateData.teto_m2    = Number(b.teto_m2);
+  }
+
   const data = await prisma.comodos.update({
     where: { id: params.id },
-    data: {
-      ...(b.tipo        && { tipo:        b.tipo as never        }),
-      ...('nome' in b   && { nome:        b.nome || null         }),
-      ...(b.parede1_m2 !== undefined && { parede1_m2: Number(b.parede1_m2) }),
-      ...(b.parede2_m2 !== undefined && { parede2_m2: Number(b.parede2_m2) }),
-      ...(b.parede3_m2 !== undefined && { parede3_m2: Number(b.parede3_m2) }),
-      ...(b.parede4_m2 !== undefined && { parede4_m2: Number(b.parede4_m2) }),
-      ...(b.teto_m2    !== undefined && { teto_m2:    Number(b.teto_m2)    }),
-      ...(b.etapa_atual && { etapa_atual: b.etapa_atual as never }),
-    },
+    data: updateData as never,
   });
   return res.status(200).json({ message: 'Comodo atualizado', data });
 }

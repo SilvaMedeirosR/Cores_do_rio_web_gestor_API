@@ -10,6 +10,8 @@ import {
 import { dominioToFuncionario, alteracaoToDominioS2206 } from './dominio/mapper';
 import type { DominioWebhookPayload } from './dominio/types';
 import { listarFuncionarios as pontotelListar } from './pontotel/client';
+import { MOCK_RELATORIO_CICLOS } from './pontotel/mock_relatorio';
+import { verificarWebhook, receberWebhook } from './whatsapp/webhook';
 
 export type RouteHandler = (
   req: VercelRequest,
@@ -430,6 +432,55 @@ function healthCheck(_req: VercelRequest, res: VercelResponse) {
 
 // ── PontoTel ──────────────────────────────────────────────────────────────────
 
+async function pontotelRelatorioObras(req: VercelRequest, res: VercelResponse) {
+  const USE_MOCK = process.env.PONTOTEL_MOCK !== 'false';
+  const fonte = USE_MOCK ? MOCK_RELATORIO_CICLOS : [];
+
+  /**
+   * INFRA-FUTURA: quando PONTOTEL_MOCK=false, buscar registros de ponto do PontoTel
+   * agrupados por período quinzenal (1-15 e 16-fim de mês) e cruzar com:
+   *   - pedidos_material: SELECT periodo_inicio, SUM(excedente_valor)
+   *     FROM pedidos_material WHERE obra_id = ? GROUP BY periodo_inicio
+   *   - funcionarios: salário/h para calcular custo_perdido_pessoal em tempo real
+   */
+
+  // Filtro por número de meses — ?meses=N (default 24, max 36)
+  const url   = new URL(req.url || '/', 'http://localhost');
+  const meses = Math.min(Math.max(parseInt(url.searchParams.get('meses') ?? '24'), 1), 36);
+
+  // Determina quais mes_ano entram no corte
+  const todosMeses = [...new Set(
+    fonte.flatMap(o => o.ciclos.map(c => c.mes_ano))
+  )].sort();
+  const mesesFiltrados = new Set(todosMeses.slice(-meses));
+
+  // Monta lista de ciclos disponíveis (eixo X unificado para os gráficos)
+  const todosLabels = [...new Set(
+    fonte.flatMap(o => o.ciclos
+      .filter(c => mesesFiltrados.has(c.mes_ano))
+      .map(c => JSON.stringify({ periodo: c.periodo, label: c.label }))
+    )
+  )].map(s => JSON.parse(s) as { periodo: string; label: string })
+    .sort((a, b) => a.periodo.localeCompare(b.periodo));
+
+  const obras = fonte.map(obra => ({
+    obra_id:        obra.obra_id,
+    obra_nome:      obra.obra_nome,
+    encarregado:    obra.encarregado,
+    n_funcionarios: obra.n_funcionarios,
+    horas_mensais:  obra.horas_mensais,
+    ciclos: obra.ciclos
+      .filter(c => mesesFiltrados.has(c.mes_ano))
+      .sort((a, b) => a.periodo.localeCompare(b.periodo))
+      .map(c => ({
+        ...c,
+        prejuizo_total: parseFloat((c.custo_perdido_pessoal + c.material_excedente_valor).toFixed(2)),
+      })),
+  }));
+
+  return res.status(200).json({ data: { obras, ciclos_labels: todosLabels, meses_filtrados: meses } });
+}
+
 async function pontotelFuncionarios(_req: VercelRequest, res: VercelResponse) {
   try {
     const funcionarios = await pontotelListar();
@@ -461,6 +512,10 @@ export const routes: Route[] = [
   // Domínio — webhook de retorno assíncrono
   { method: 'POST',   path: '/dominio/webhook',                              handler: dominioWebhook              },
   // PontoTel — integração com sistema de ponto externo
+  { method: 'GET',    path: '/pontotel/relatorios/obras',                    handler: pontotelRelatorioObras      },
   { method: 'GET',    path: '/pontotel/funcionarios',                        handler: pontotelFuncionarios        },
+  // WhatsApp — INFRA-FUTURA: webhook de justificativa de material excedente
+  { method: 'GET',    path: '/whatsapp/webhook',                             handler: verificarWebhook            },
+  { method: 'POST',   path: '/whatsapp/webhook',                             handler: receberWebhook              },
   { method: 'GET',    path: '/health',                                       handler: healthCheck                 },
 ];

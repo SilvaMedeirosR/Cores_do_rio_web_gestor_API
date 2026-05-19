@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="currentColor" aria-label="Cores do Rio">
+  <path d="M 500 110 L 90 400 L 910 400 L 500 110 Z M 500 195 L 280 350 L 720 350 L 500 195 Z" fill-rule="evenodd"/>
+  <rect x="90"  y="370" width="820" height="60"/>
+  <rect x="90"  y="830" width="820" height="50"/>
+  <rect x="155" y="430" width="80"  height="400"/>
+  <rect x="335" y="430" width="80"  height="400"/>
+  <rect x="460" y="430" width="80"  height="400"/>
+  <rect x="585" y="430" width="80"  height="400"/>
+  <rect x="765" y="430" width="80"  height="400"/>
+</svg>

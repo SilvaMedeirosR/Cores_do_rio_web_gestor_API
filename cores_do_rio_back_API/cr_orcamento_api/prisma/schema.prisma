@@ -20,6 +20,8 @@ model comodos {
   parede3_m2       Decimal            @default(0) @db.Decimal(8, 2)
   parede4_m2       Decimal            @default(0) @db.Decimal(8, 2)
   teto_m2          Decimal            @default(0) @db.Decimal(8, 2)
+  paredes          Json               @default("[]") @db.JsonB
+  tetos            Json               @default("[]") @db.JsonB
   etapa_atual      etapa_processo?    @default(massa_parede)
   created_at       DateTime?          @default(now()) @db.Timestamptz(6)
   pavimentos       pavimentos         @relation(fields: [pavimento_id], references: [id], onDelete: Cascade, onUpdate: NoAction)

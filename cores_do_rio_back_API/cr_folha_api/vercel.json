@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.ts",
+      "headers": {
+        "X-Content-Type-Options": "nosniff"
+      }
+    }
+  ],
+  "crons": [
+    {
+      "path": "/cron/gerar",
+      "schedule": "0 7 1 * *"
+    },
+    {
+      "path": "/cron/notificar",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

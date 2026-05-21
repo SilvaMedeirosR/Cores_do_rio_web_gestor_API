@@ -405,8 +405,13 @@ async function preencherOrcamento(req: VercelRequest, res: VercelResponse, param
   const { precos, preco_tipos, pavimentos, apartamento_tipos } = req.body ?? {};
 
   const data = await prisma.$transaction(async (tx) => {
+    // Limpa dados anteriores para garantir idempotência (re-envio substitui)
+    await tx.obra_precos.deleteMany({ where: { obra_id: params.id } });
+    await tx.pavimentos.deleteMany({ where: { obra_id: params.id } }); // cascata para comodos/apartamentos
+    await tx.preco_tipos.deleteMany({ where: { obra_id: params.id } }); // cascata para preco_tipo_precos
+    await tx.apartamento_tipos.deleteMany({ where: { obra_id: params.id } });
+
     if (Array.isArray(precos) && precos.length > 0) {
-      await tx.obra_precos.deleteMany({ where: { obra_id: params.id } });
       await tx.obra_precos.createMany({
         data: precos.map((p: { etapa: string; preco_m2: number }) => ({
           obra_id: params.id, etapa: p.etapa as never, preco_m2: p.preco_m2,

@@ -43,6 +43,7 @@ interface Contrato {
   status: string; data_inicio: string | null; previsao_conclusao: string | null;
   created_at: string;
   orcamento_total: number;
+  pavimentos: { id: string }[];
 }
 
 interface ContratoForm {
@@ -153,6 +154,7 @@ export default function ContratosPage() {
   const [erro, setErro]             = useState<string | null>(null);
   const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltro]   = useState("todos");
+  const [lucros, setLucros]         = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -353,35 +355,37 @@ export default function ContratosPage() {
         ) : (
           <div className="divide-y divide-zinc-100">
             {contFiltrados.map(c => {
-              const constNome = c.empreiteiras?.nome ?? c.empreiteira ?? null;
-              const constCNPJ = c.empreiteiras?.cnpj ?? null;
+              const constNome  = c.empreiteiras?.nome ?? c.empreiteira ?? null;
+              const constCNPJ  = c.empreiteiras?.cnpj ?? null;
+              const temOrc     = (c.orcamento_total ?? 0) > 0;
+              const lucroVal   = parseFloat(lucros[c.id] ?? "") || 0;
+              const totalGeral = (c.orcamento_total ?? 0) + lucroVal;
+              const fmt        = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
               return (
                 <div key={c.id} className="px-5 sm:px-6 py-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <h3 className="font-semibold text-zinc-900 text-base leading-snug">{c.nome}</h3>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[c.status] ?? "bg-zinc-100 text-zinc-600 border-zinc-200"}`}>
                           {STATUS_LABELS[c.status] ?? c.status}
                         </span>
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                        {c.local && (
-                          <span className="flex items-center gap-1"><MapPin size={11} />{c.local}</span>
-                        )}
-                        {constNome && (
-                          <span className="flex items-center gap-1">
-                            <Building2 size={11} />
-                            {constNome}
-                            {constCNPJ && <span className="font-mono text-zinc-400 ml-1">{constCNPJ}</span>}
+                        {temOrc && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
+                            Orçamento recebido
                           </span>
                         )}
-                        {c.data_inicio && (
-                          <span className="flex items-center gap-1"><Calendar size={11} />Início: {fmtDate(c.data_inicio)}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                        {c.local && <span className="flex items-center gap-1"><MapPin size={11} />{c.local}</span>}
+                        {constNome && (
+                          <span className="flex items-center gap-1">
+                            <Building2 size={11} />{constNome}
+                            {constCNPJ && <span className="font-mono text-zinc-400 ml-1">{fmtCNPJ(constCNPJ)}</span>}
+                          </span>
                         )}
-                        {c.previsao_conclusao && (
-                          <span className="flex items-center gap-1"><Clock size={11} />Conclusão: {fmtDate(c.previsao_conclusao)}</span>
-                        )}
+                        {c.data_inicio && <span className="flex items-center gap-1"><Calendar size={11} />Início: {fmtDate(c.data_inicio)}</span>}
+                        {c.previsao_conclusao && <span className="flex items-center gap-1"><Clock size={11} />Conclusão: {fmtDate(c.previsao_conclusao)}</span>}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -389,6 +393,56 @@ export default function ContratosPage() {
                       <div className="text-sm text-zinc-600">{fmtDate(c.created_at.split("T")[0])}</div>
                     </div>
                   </div>
+
+                  {/* Resumo financeiro + gerar proposta */}
+                  {temOrc && (
+                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 mt-1">
+                      <div className="flex flex-wrap gap-6 mb-4">
+                        <div>
+                          <div className="text-xs text-zinc-400 mb-0.5">Mão de obra</div>
+                          <div className="text-base font-bold text-zinc-900">{fmt(c.orcamento_total)}</div>
+                        </div>
+                        {lucroVal > 0 && (
+                          <div>
+                            <div className="text-xs text-zinc-400 mb-0.5">Lucro</div>
+                            <div className="text-base font-bold text-emerald-700">{fmt(lucroVal)}</div>
+                          </div>
+                        )}
+                        {lucroVal > 0 && (
+                          <div>
+                            <div className="text-xs text-zinc-400 mb-0.5">Total da proposta</div>
+                            <div className="text-base font-bold text-[#1A2A3A]">{fmt(totalGeral)}</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex-1 min-w-[160px] max-w-xs">
+                          <label className="block text-xs text-zinc-500 mb-1">Lucro desejado (R$)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-medium pointer-events-none">R$</span>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={lucros[c.id] ?? ""}
+                              onChange={e => setLucros(prev => ({ ...prev, [c.id]: e.target.value }))}
+                              placeholder="0,00"
+                              className="w-full border border-zinc-200 rounded-lg pl-8 pr-3 py-2 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow"
+                            />
+                          </div>
+                        </div>
+                        <div className="pt-5">
+                          <a
+                            href={`/metricas/contratos/${c.id}/proposta?lucro=${lucroVal}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            style={{ background: "#1A2A3A", color: "#F3ECE0", textDecoration: "none" }}
+                          >
+                            Gerar Proposta →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

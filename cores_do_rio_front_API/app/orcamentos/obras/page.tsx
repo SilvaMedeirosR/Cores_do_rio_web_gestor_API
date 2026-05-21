@@ -248,6 +248,7 @@ export default function ObrasPage() {
   const [deleting, setDeleting]       = useState(false);
   const [busca, setBusca]             = useState("");
   const [obraParaOrcar, setObraParaOrcar] = useState<ObraLista | null>(null);
+  const [loadingEdit, setLoadingEdit]   = useState(false);
   const [pavCollapsed, setPavCollapsed] = useState<Record<number, boolean>>({});
   const [aptCollapsed, setAptCollapsed] = useState<Record<string, boolean>>({});
   const [showPTApt,       setShowPTApt]       = useState<Record<string,boolean>>({});
@@ -258,6 +259,75 @@ export default function ObrasPage() {
   const toggleApt = (pi: number, ai: number) => setAptCollapsed(p => { const k = `${pi}-${ai}`; return { ...p, [k]: !p[k] }; });
 
   const precoMap = Object.fromEntries(form.precos.map(p => [p.etapa, n(p.preco_m2)]));
+
+  const abrirParaOrcar = useCallback(async (obra: ObraLista) => {
+    setObraParaOrcar(obra);
+    setErro(null);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (obra.pavimentos.length === 0) {
+      setForm(emptyForm());
+      return;
+    }
+
+    setLoadingEdit(true);
+    try {
+      const r = await fetch(`${API}/obras/${obra.id}`);
+      const j = await r.json();
+      const o = j.data;
+      if (!o) { setForm(emptyForm()); return; }
+
+      const idToNome: Record<string, string> = Object.fromEntries(
+        (o.preco_tipos ?? []).map((t: any) => [t.id, t.nome])
+      );
+
+      const mapComodoToForm = (c: any): ComodoForm => ({
+        tipo: c.tipo ?? "sala",
+        nome: c.nome ?? "",
+        paredes: Array.isArray(c.paredes) && c.paredes.length > 0
+          ? c.paredes.map((p: any) => ({ m2: String(Number(p.m2)), cor: p.cor ?? "" }))
+          : [{ m2: String(Number(c.parede1_m2 ?? 0) + Number(c.parede2_m2 ?? 0) + Number(c.parede3_m2 ?? 0) + Number(c.parede4_m2 ?? 0)), cor: "" }],
+        tetos: Array.isArray(c.tetos) && c.tetos.length > 0
+          ? c.tetos.map((t: any) => ({ m2: String(Number(t.m2)) }))
+          : [{ m2: String(Number(c.teto_m2 ?? 0)) }],
+        preco_tipo_nome: c.preco_tipo_id ? (idToNome[c.preco_tipo_id] ?? "") : "",
+      });
+
+      const precos: PrecoForm[] = ETAPAS.map(e => {
+        const found = (o.obra_precos ?? []).find((p: any) => p.etapa === e.value);
+        return { etapa: e.value, preco_m2: found ? String(Number(found.preco_m2)) : "" };
+      });
+
+      const preco_tipos: PrecoTipoForm[] = (o.preco_tipos ?? []).map((pt: any) => ({
+        nome: pt.nome,
+        precos: Object.fromEntries(
+          ETAPAS.map(e => {
+            const found = (pt.precos ?? []).find((p: any) => p.etapa === e.value);
+            return [e.value, found ? String(Number(found.preco_m2)) : ""];
+          })
+        ),
+      }));
+
+      const apartamento_tipos: string[] = (o.apartamento_tipos ?? []).map((t: any) => t.nome);
+
+      const pavimentos: PavimentoForm[] = (o.pavimentos ?? []).map((pav: any) => ({
+        nome: pav.nome ?? "",
+        numero: String(pav.numero ?? ""),
+        tipo: pav.tipo ?? "pavimento",
+        comodos: (pav.comodos ?? []).map(mapComodoToForm),
+        apartamentos: (pav.apartamentos ?? []).map((apt: any) => ({
+          nome: apt.nome ?? "",
+          numero: apt.numero != null ? String(apt.numero) : "",
+          tipo_nome: apt.apartamento_tipos?.nome ?? "",
+          preco_tipo_nome: apt.preco_tipo_id ? (idToNome[apt.preco_tipo_id] ?? "") : "",
+          comodos: (apt.comodos ?? []).map(mapComodoToForm),
+        })),
+      }));
+
+      setForm({ nome: o.nome, local: o.local ?? "", empreiteira_id: o.empreiteira_id ?? "", nova_empreiteira: "", precos, preco_tipos, pavimentos, apartamento_tipos });
+    } catch { setForm(emptyForm()); } finally { setLoadingEdit(false); }
+  }, []);
 
   const fetchObras = useCallback(async () => {
     setLoading(true);
@@ -447,7 +517,7 @@ export default function ObrasPage() {
       </div>
 
       {/* Form de orçamento (abre ao clicar em card em negociação) */}
-      {showForm && obraParaOrcar && (
+      {showForm && obraParaOrcar && !loadingEdit && (
         <form onSubmit={handleSubmit} className="bg-white border border-zinc-200 rounded-xl shadow-sm mb-8 overflow-hidden">
 
           {/* Dados da obra (somente leitura) */}
@@ -937,6 +1007,13 @@ export default function ObrasPage() {
         </form>
       )}
 
+      {/* Loading edit overlay */}
+      {loadingEdit && (
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm mb-8 flex items-center justify-center py-16">
+          <p className="text-sm text-zinc-400">Carregando dados do orçamento...</p>
+        </div>
+      )}
+
       {/* Obras em Negociação */}
       {!loading && obrasNegociacao.length > 0 && (
         <div className="mb-8">
@@ -945,34 +1022,37 @@ export default function ObrasPage() {
             Em Negociação
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {obrasNegociacao.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => {
-                  setObraParaOrcar(o);
-                  setForm(emptyForm());
-                  setErro(null);
-                  setShowForm(true);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                className="text-left bg-white border border-amber-200 hover:border-amber-400 rounded-xl p-4 shadow-sm hover:shadow-md transition-all group"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="font-semibold text-zinc-900 text-sm leading-snug group-hover:text-amber-800 transition-colors">{o.nome}</p>
-                  <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
-                    Em negociação
-                  </span>
-                </div>
-                {o.local && <p className="text-xs text-zinc-500 mb-1.5 truncate">{o.local}</p>}
-                {(o.empreiteiras?.nome ?? o.empreiteira) && (
-                  <p className="text-xs text-zinc-400">{o.empreiteiras?.nome ?? o.empreiteira}</p>
-                )}
-                <p className="mt-3 text-xs font-medium text-amber-600 group-hover:text-amber-800 transition-colors">
-                  Preencher orçamento →
-                </p>
-              </button>
-            ))}
+            {obrasNegociacao.map(o => {
+              const temOrc = o.pavimentos.length > 0;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => abrirParaOrcar(o)}
+                  className="text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all group"
+                  style={{ borderColor: temOrc ? "#6ee7b7" : "#fcd34d" }}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="font-semibold text-zinc-900 text-sm leading-snug">{o.nome}</p>
+                    <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${temOrc ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+                      {temOrc ? "Enviado" : "Pendente"}
+                    </span>
+                  </div>
+                  {o.local && <p className="text-xs text-zinc-500 mb-1.5 truncate">{o.local}</p>}
+                  {(o.empreiteiras?.nome ?? o.empreiteira) && (
+                    <p className="text-xs text-zinc-400">{o.empreiteiras?.nome ?? o.empreiteira}</p>
+                  )}
+                  {temOrc && (o.orcamento_total ?? 0) > 0 && (
+                    <p className="text-xs font-semibold text-emerald-700 mt-1">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(o.orcamento_total)}
+                    </p>
+                  )}
+                  <p className={`mt-3 text-xs font-medium transition-colors ${temOrc ? "text-emerald-600 group-hover:text-emerald-800" : "text-amber-600 group-hover:text-amber-800"}`}>
+                    {temOrc ? "Editar orçamento →" : "Preencher orçamento →"}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

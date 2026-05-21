@@ -52,6 +52,7 @@ interface ObraLista {
   id: string; nome: string; local: string | null; empreiteira: string | null;
   empreiteira_id: string | null;
   empreiteiras: Empreiteira | null;
+  status: string | null;
   created_at: string; orcamento_total: number;
   pavimentos: { id: string; nome: string; comodos: { id: string }[] }[];
 }
@@ -246,6 +247,7 @@ export default function ObrasPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting]       = useState(false);
   const [busca, setBusca]             = useState("");
+  const [obraParaOrcar, setObraParaOrcar] = useState<ObraLista | null>(null);
   const [pavCollapsed, setPavCollapsed] = useState<Record<number, boolean>>({});
   const [aptCollapsed, setAptCollapsed] = useState<Record<string, boolean>>({});
   const [showPTApt,       setShowPTApt]       = useState<Record<string,boolean>>({});
@@ -271,13 +273,16 @@ export default function ObrasPage() {
 
   useEffect(() => { fetchObras(); }, [fetchObras]);
 
+  const obrasNegociacao = obras.filter(o => o.status === "negociacao");
+  const obrasAtivas     = obras.filter(o => o.status !== "negociacao");
+
   const obrasFiltradas = busca.trim()
-    ? obras.filter(o => {
+    ? obrasAtivas.filter(o => {
         const q = busca.toLowerCase();
         const emp = o.empreiteiras?.nome ?? o.empreiteira ?? "";
         return o.nome.toLowerCase().includes(q) || (o.local ?? "").toLowerCase().includes(q) || emp.toLowerCase().includes(q);
       })
-    : obras;
+    : obrasAtivas;
 
   const pagObras = usePagination(obrasFiltradas);
 
@@ -364,23 +369,6 @@ export default function ObrasPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setErro(null); setSub(true);
     try {
-      let empreiteiraId = form.empreiteira_id || null;
-
-      if (form.nova_empreiteira.trim()) {
-        const re = await fetch(`${API}/empreiteiras`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nome: form.nova_empreiteira.trim() }),
-        });
-        const je = await re.json();
-        if (!re.ok) { setErro(je.error ?? "Erro ao criar empreiteira"); setSub(false); return; }
-        empreiteiraId = je.data.id;
-        setEmpreiteiras(prev => {
-          const existe = prev.find(x => x.id === je.data.id);
-          return existe ? prev : [...prev, je.data].sort((a, b) => a.nome.localeCompare(b.nome));
-        });
-      }
-
       const mapComodo = (c: ComodoForm) => ({
         tipo: c.tipo, nome: c.nome || null,
         paredes: c.paredes.map(p => ({ m2: n(p.m2), cor: p.cor || null })),
@@ -388,10 +376,7 @@ export default function ObrasPage() {
         preco_tipo_nome: c.preco_tipo_nome || null,
       });
 
-      const payload = {
-        nome: form.nome,
-        local: form.local || null,
-        empreiteira_id: empreiteiraId,
+      const parcialPayload = {
         precos: form.precos.filter(p => p.preco_m2 !== "").map(p => ({ etapa: p.etapa, preco_m2: n(p.preco_m2) })),
         preco_tipos: form.preco_tipos.filter(t => t.nome.trim()).map(t => ({
           nome: t.nome.trim(),
@@ -413,6 +398,34 @@ export default function ObrasPage() {
           comodos: pav.comodos.map(mapComodo),
         })),
       };
+
+      if (obraParaOrcar) {
+        const r = await fetch(`${API}/obras/${obraParaOrcar.id}/orcamento`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parcialPayload),
+        });
+        if (!r.ok) { const j = await r.json(); toastError(j.error ?? "Erro ao salvar"); setErro(j.error ?? "Erro ao salvar"); return; }
+        toastSuccess("Orçamento registrado com sucesso!");
+        setForm(emptyForm()); setShowForm(false); setObraParaOrcar(null); await fetchObras();
+        return;
+      }
+
+      let empreiteiraId = form.empreiteira_id || null;
+      if (form.nova_empreiteira.trim()) {
+        const re = await fetch(`${API}/empreiteiras`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nome: form.nova_empreiteira.trim() }),
+        });
+        const je = await re.json();
+        if (!re.ok) { setErro(je.error ?? "Erro ao criar empreiteira"); setSub(false); return; }
+        empreiteiraId = je.data.id;
+        setEmpreiteiras(prev => {
+          const existe = prev.find(x => x.id === je.data.id);
+          return existe ? prev : [...prev, je.data].sort((a, b) => a.nome.localeCompare(b.nome));
+        });
+      }
+
+      const payload = { nome: form.nome, local: form.local || null, empreiteira_id: empreiteiraId, ...parcialPayload };
       const r = await fetch(`${API}/obras`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) { const j = await r.json(); toastError(j.error ?? "Erro ao salvar"); setErro(j.error ?? "Erro ao salvar"); return; }
       toastSuccess("Obra criada com sucesso!");
@@ -454,15 +467,15 @@ export default function ObrasPage() {
             Obras
           </h1>
           <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>
-            {loading ? "Carregando..." : `${obras.length} obra${obras.length !== 1 ? "s" : ""} · ${empreiteiras.length} empreiteira${empreiteiras.length !== 1 ? "s" : ""}`}
+            {loading ? "Carregando..." : `${obras.length} obra${obras.length !== 1 ? "s" : ""}${obrasNegociacao.length > 0 ? ` · ${obrasNegociacao.length} em negociação` : ""} · ${empreiteiras.length} empreiteira${empreiteiras.length !== 1 ? "s" : ""}`}
           </p>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); setErro(null); }}
+          onClick={() => { if (showForm && obraParaOrcar) { setShowForm(false); setObraParaOrcar(null); setErro(null); setForm(emptyForm()); } else { setShowForm(!showForm); setObraParaOrcar(null); setErro(null); if (showForm) setForm(emptyForm()); } }}
           className="cr-btn-primary"
-          style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", backgroundColor: showForm ? "rgba(26,42,58,0.7)" : "#1A2A3A", color: "#F3ECE0", cursor: "pointer", fontSize: "0.8rem", fontWeight: 500, transition: "background-color 0.15s" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", backgroundColor: (showForm && !obraParaOrcar) ? "rgba(26,42,58,0.7)" : "#1A2A3A", color: "#F3ECE0", cursor: "pointer", fontSize: "0.8rem", fontWeight: 500, transition: "background-color 0.15s" }}
         >
-          {showForm ? <><XIcon size={13} strokeWidth={2.5} /> Cancelar</> : <><Plus size={13} strokeWidth={2.5} /> Nova Obra</>}
+          {(showForm && !obraParaOrcar) ? <><XIcon size={13} strokeWidth={2.5} /> Cancelar</> : <><Plus size={13} strokeWidth={2.5} /> Nova Obra</>}
         </button>
       </div>
 
@@ -472,30 +485,57 @@ export default function ObrasPage() {
 
           {/* Dados */}
           <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
-            <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Dados da Obra</h2>
-            {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Nome *</label>
-                <input required value={form.nome} onChange={e => setObra("nome", e.target.value)}
-                  className={INPUT} placeholder="Ex: Edificio Central" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Local</label>
-                <input value={form.local} onChange={e => setObra("local", e.target.value)}
-                  className={INPUT} placeholder="Ex: Rua das Flores, 123" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Empreiteira</label>
-                <EmpreiteiraSelect
-                  empreiteiras={empreiteiras}
-                  value={form.empreiteira_id}
-                  novaValue={form.nova_empreiteira}
-                  onChange={id => setForm(p => ({ ...p, empreiteira_id: id }))}
-                  onNovaChange={v => setForm(p => ({ ...p, nova_empreiteira: v }))}
-                />
-              </div>
-            </div>
+            {obraParaOrcar ? (
+              <>
+                <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-3">Orçamento de Mão de Obra</h2>
+                {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-wrap items-start gap-x-6 gap-y-1">
+                  <div>
+                    <span className="text-xs text-amber-600 font-medium">Obra</span>
+                    <p className="text-sm font-semibold text-zinc-900">{obraParaOrcar.nome}</p>
+                  </div>
+                  {obraParaOrcar.local && (
+                    <div>
+                      <span className="text-xs text-amber-600 font-medium">Local</span>
+                      <p className="text-sm text-zinc-700">{obraParaOrcar.local}</p>
+                    </div>
+                  )}
+                  {(obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira) && (
+                    <div>
+                      <span className="text-xs text-amber-600 font-medium">Construtora</span>
+                      <p className="text-sm text-zinc-700">{obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Dados da Obra</h2>
+                {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Nome *</label>
+                    <input required value={form.nome} onChange={e => setObra("nome", e.target.value)}
+                      className={INPUT} placeholder="Ex: Edificio Central" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Local</label>
+                    <input value={form.local} onChange={e => setObra("local", e.target.value)}
+                      className={INPUT} placeholder="Ex: Rua das Flores, 123" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Empreiteira</label>
+                    <EmpreiteiraSelect
+                      empreiteiras={empreiteiras}
+                      value={form.empreiteira_id}
+                      novaValue={form.nova_empreiteira}
+                      onChange={id => setForm(p => ({ ...p, empreiteira_id: id }))}
+                      onNovaChange={v => setForm(p => ({ ...p, nova_empreiteira: v }))}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Precos */}
@@ -948,21 +988,61 @@ export default function ObrasPage() {
               </span>
             ) : <span />}
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => { setShowForm(false); setErro(null); setForm(emptyForm()); }}
+              <button type="button" onClick={() => { setShowForm(false); setObraParaOrcar(null); setErro(null); setForm(emptyForm()); }}
                 className="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-800 transition-colors">
                 Cancelar
               </button>
               <button type="submit" disabled={submitting}
                 className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
-                {submitting ? "Salvando..." : "Registrar Obra"}
+                {submitting ? "Salvando..." : obraParaOrcar ? "Enviar Orçamento" : "Registrar Obra"}
               </button>
             </div>
           </div>
         </form>
       )}
 
+      {/* Obras em Negociação */}
+      {!loading && obrasNegociacao.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+            Em Negociação
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {obrasNegociacao.map(o => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => {
+                  setObraParaOrcar(o);
+                  setForm(emptyForm());
+                  setErro(null);
+                  setShowForm(true);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="text-left bg-white border border-amber-200 hover:border-amber-400 rounded-xl p-4 shadow-sm hover:shadow-md transition-all group"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="font-semibold text-zinc-900 text-sm leading-snug group-hover:text-amber-800 transition-colors">{o.nome}</p>
+                  <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                    Em negociação
+                  </span>
+                </div>
+                {o.local && <p className="text-xs text-zinc-500 mb-1.5 truncate">{o.local}</p>}
+                {(o.empreiteiras?.nome ?? o.empreiteira) && (
+                  <p className="text-xs text-zinc-400">{o.empreiteiras?.nome ?? o.empreiteira}</p>
+                )}
+                <p className="mt-3 text-xs font-medium text-amber-600 group-hover:text-amber-800 transition-colors">
+                  Preencher orçamento →
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Busca */}
-      {!loading && obras.length > 0 && (
+      {!loading && obrasAtivas.length > 0 && (
         <div style={{ position: "relative", maxWidth: "360px", marginBottom: "16px" }}>
           <Search size={14} style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "rgba(26,42,58,0.35)", pointerEvents: "none" }} />
           <input

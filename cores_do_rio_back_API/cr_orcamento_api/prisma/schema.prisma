@@ -113,18 +113,22 @@ model preco_tipo_precos {
 model empreiteiras {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome       String    @unique
+  cnpj       String?
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   obras      obras[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model obras {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nome              String
-  local             String?
-  empreiteira       String?
-  empreiteira_id    String?             @db.Uuid
-  created_at        DateTime?           @default(now()) @db.Timestamptz(6)
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                String
+  local               String?
+  empreiteira         String?
+  empreiteira_id      String?             @db.Uuid
+  status              String              @default("ativo")
+  data_inicio         DateTime?           @db.Date
+  previsao_conclusao  DateTime?           @db.Date
+  created_at          DateTime?           @default(now()) @db.Timestamptz(6)
   empreiteiras      empreiteiras?       @relation(fields: [empreiteira_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   obra_precos       obra_precos[]
   preco_tipos       preco_tipos[]

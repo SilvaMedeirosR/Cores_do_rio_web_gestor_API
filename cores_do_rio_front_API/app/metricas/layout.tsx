@@ -6,6 +6,7 @@ const tabs = [
   { label: "Visão Geral", href: "/metricas" },
   { label: "Desempenho",  href: "/metricas/desempenho" },
   { label: "Rotina",      href: "/metricas/rotina" },
+  { label: "Contratos",   href: "/metricas/contratos" },
 ];
 
 export default function MetricasLayout({ children }: { children: React.ReactNode }) {

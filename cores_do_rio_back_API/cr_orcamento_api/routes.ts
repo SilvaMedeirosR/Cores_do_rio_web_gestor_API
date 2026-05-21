@@ -1,5 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from './lib/prisma';
+import { supabase } from './lib/supabase';
+import { enviarEmail } from './lib/skymail';
 
 export type RouteHandler = (
   req: VercelRequest,
@@ -106,6 +108,63 @@ const pavimentoInclude = {
   },
 };
 
+// ── Notificação de Orçamentistas ──────────────────────────────────────────────
+
+function htmlNovaObra(nome: string, local: string | null): string {
+  const BASE  = `font-family:-apple-system,sans-serif;background:#f4f4f5;padding:32px 16px;`;
+  const CARD  = `background:#fff;border-radius:12px;border:1px solid #e4e4e7;max-width:560px;margin:0 auto;overflow:hidden;`;
+  const HEAD  = `background:#18181b;padding:20px 28px;color:#fff;font-size:14px;font-weight:600;`;
+  const BODY  = `padding:24px 28px;color:#3f3f46;`;
+  const FOOT  = `border-top:1px solid #f4f4f5;padding:16px 28px;font-size:11px;color:#a1a1aa;`;
+  const campo = (l: string, v: string) =>
+    `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;letter-spacing:.05em">${l}</div><div style="font-size:14px;color:#18181b;margin-top:2px">${v}</div></div>`;
+  return `<div style="${BASE}"><div style="${CARD}">
+    <div style="${HEAD}"><span style="background:#f97316;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;margin-right:8px;">Cores do Rio</span>Nova Obra em Negociação</div>
+    <div style="${BODY}">
+      <p style="margin:0 0 20px;font-size:14px;">Uma nova obra entrou em <strong>negociação</strong> e aguarda medição e orçamento de mão de obra.</p>
+      ${campo('Obra', nome)}
+      ${local ? campo('Local', local) : ''}
+      <p style="margin:20px 0 0;font-size:13px;color:#71717a;">Acesse o sistema em <strong>Orçamentos → Obras</strong> para visualizar e iniciar o orçamento.</p>
+    </div>
+    <div style="${FOOT}">Sistema de Gestão Cores do Rio · mensagem automática</div>
+  </div></div>`;
+}
+
+async function notificarOrcamentistas(obra: { nome: string; local: string | null }) {
+  try {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, nome, sobrenome')
+      .eq('funcao', 'orcamentista');
+
+    if (!profiles?.length) return;
+
+    const emails: string[] = [];
+    for (const p of profiles) {
+      const { data: { user } } = await (supabase.auth.admin as any).getUserById(p.id);
+      if (user?.email) emails.push(user.email);
+    }
+
+    if (!emails.length) return;
+
+    await Promise.allSettled([
+      supabase.from('notificacoes').insert(
+        emails.map(email => ({
+          destinatario: email,
+          titulo: `Nova obra em negociação: ${obra.nome}`,
+          corpo: 'A medição e o orçamento de mão de obra devem ser apresentados.',
+          tipo: 'obra_negociacao',
+        }))
+      ),
+      enviarEmail({
+        to: emails,
+        subject: `Nova obra em negociação: ${obra.nome}`,
+        html: htmlNovaObra(obra.nome, obra.local),
+      }),
+    ]);
+  } catch { /* falha silenciosa — não bloqueia criação da obra */ }
+}
+
 // ── Orçamentos ────────────────────────────────────────────────────────────────
 
 async function listarOrcamentos(_req: VercelRequest, res: VercelResponse) {
@@ -133,24 +192,36 @@ async function listarEmpreiteiras(_req: VercelRequest, res: VercelResponse) {
 }
 
 async function criarEmpreiteira(req: VercelRequest, res: VercelResponse) {
-  const { nome } = req.body ?? {};
+  const { nome, cnpj } = req.body ?? {};
   if (!nome) return res.status(400).json({ error: 'nome e obrigatorio' });
   try {
     const existing = await (prisma as any).empreiteiras.findUnique({ where: { nome: String(nome).trim() } });
-    if (existing) return res.status(200).json({ message: 'Empreiteira ja existe', data: existing });
-    const data = await (prisma as any).empreiteiras.create({ data: { nome: String(nome).trim() } });
+    if (existing) {
+      if (cnpj && !existing.cnpj) {
+        const upd = await (prisma as any).empreiteiras.update({ where: { id: existing.id }, data: { cnpj: String(cnpj).trim() } });
+        return res.status(200).json({ message: 'Empreiteira ja existe (cnpj atualizado)', data: upd });
+      }
+      return res.status(200).json({ message: 'Empreiteira ja existe', data: existing });
+    }
+    const data = await (prisma as any).empreiteiras.create({
+      data: { nome: String(nome).trim(), cnpj: cnpj ? String(cnpj).trim() : null },
+    });
     return res.status(201).json({ message: 'Empreiteira criada com sucesso', data });
   } catch { return res.status(500).json({ error: 'Erro ao criar empreiteira' }); }
 }
 
 // ── Obras (lista) ─────────────────────────────────────────────────────────────
 
-async function listarObras(_req: VercelRequest, res: VercelResponse) {
-  const obras = await prisma.obras.findMany({
+async function listarObras(req: VercelRequest, res: VercelResponse) {
+  const url    = new URL(req.url || '/', 'http://localhost');
+  const status = url.searchParams.get('status');
+  const obras  = await prisma.obras.findMany({
     orderBy: { created_at: 'desc' },
+    where: status ? { status } : undefined,
     include: {
       obra_precos: true,
       preco_tipos: { include: { precos: true } },
+      empreiteiras: { select: { id: true, nome: true, cnpj: true } },
       pavimentos: { orderBy: { numero: 'asc' }, include: pavimentoInclude },
     },
   });
@@ -201,17 +272,22 @@ async function getObra(_req: VercelRequest, res: VercelResponse, params: Record<
 // ── Obras (criar) ─────────────────────────────────────────────────────────────
 
 async function criarObra(req: VercelRequest, res: VercelResponse) {
-  const { nome, local, empreiteira, empreiteira_id, pavimentos, apartamento_tipos, preco_tipos } = req.body ?? {};
+  const { nome, local, empreiteira, empreiteira_id, pavimentos, apartamento_tipos, preco_tipos, status, data_inicio, previsao_conclusao } = req.body ?? {};
   if (!nome) return res.status(400).json({ error: 'nome e obrigatorio' });
+
+  const obraStatus = status ?? 'ativo';
 
   const data = await prisma.$transaction(async (tx) => {
     const obra = await tx.obras.create({
       data: {
         nome,
-        local: local ?? null,
-        empreiteira: empreiteira ?? null,
-        empreiteira_id: empreiteira_id ?? null,
-      },
+        local:              local              ?? null,
+        empreiteira:        empreiteira        ?? null,
+        empreiteira_id:     empreiteira_id     ?? null,
+        status:             obraStatus,
+        data_inicio:        data_inicio        ? new Date(data_inicio)        : null,
+        previsao_conclusao: previsao_conclusao ? new Date(previsao_conclusao) : null,
+      } as never,
     });
 
     const precos = (req.body ?? {}).precos;
@@ -254,18 +330,24 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
       criados.forEach(t => { tiposMap[t.nome] = t.id; });
     }
 
-    const mapComodo = (c: any, pavimento_id: string, apartamento_id?: string) => ({
-      pavimento_id,
-      apartamento_id: apartamento_id ?? null,
-      tipo: c.tipo as never,
-      nome: c.nome ?? null,
-      preco_tipo_id: c.preco_tipo_nome ? (tipoPrecoNomeMap[c.preco_tipo_nome] ?? null) : null,
-      parede1_m2: c.parede1_m2 ?? 0,
-      parede2_m2: c.parede2_m2 ?? 0,
-      parede3_m2: c.parede3_m2 ?? 0,
-      parede4_m2: c.parede4_m2 ?? 0,
-      teto_m2: c.teto_m2 ?? 0,
-    });
+    const mapComodo = (c: any, pavimento_id: string, apartamento_id?: string) => {
+      const paredes: ParedeItem[] = Array.isArray(c.paredes) ? c.paredes : [];
+      const tetos:   TetoItem[]   = Array.isArray(c.tetos)   ? c.tetos   : [];
+      return {
+        pavimento_id,
+        apartamento_id: apartamento_id ?? null,
+        tipo: c.tipo as never,
+        nome: c.nome ?? null,
+        preco_tipo_id: c.preco_tipo_nome ? (tipoPrecoNomeMap[c.preco_tipo_nome] ?? null) : null,
+        paredes: paredes as never,
+        tetos:   tetos   as never,
+        parede1_m2: paredes.reduce((s, p) => s + Number(p.m2), 0) || (c.parede1_m2 ?? 0),
+        parede2_m2: c.parede2_m2 ?? 0,
+        parede3_m2: c.parede3_m2 ?? 0,
+        parede4_m2: c.parede4_m2 ?? 0,
+        teto_m2: tetos.reduce((s, t) => s + Number(t.m2), 0) || (c.teto_m2 ?? 0),
+      };
+    };
 
     if (Array.isArray(pavimentos) && pavimentos.length > 0) {
       for (const pav of pavimentos) {
@@ -307,13 +389,116 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
     });
   });
 
+  if (obraStatus === 'negociacao' && data) {
+    await notificarOrcamentistas({ nome: (data as any).nome, local: (data as any).local });
+  }
+
   return res.status(201).json({ message: 'Obra criada com sucesso', data });
+}
+
+// ── Obras (preencher orçamento — titular já criou, orçamentista preenche medições) ──
+
+async function preencherOrcamento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const obra = await prisma.obras.findUnique({ where: { id: params.id } });
+  if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  const { precos, preco_tipos, pavimentos, apartamento_tipos } = req.body ?? {};
+
+  const data = await prisma.$transaction(async (tx) => {
+    if (Array.isArray(precos) && precos.length > 0) {
+      await tx.obra_precos.deleteMany({ where: { obra_id: params.id } });
+      await tx.obra_precos.createMany({
+        data: precos.map((p: { etapa: string; preco_m2: number }) => ({
+          obra_id: params.id, etapa: p.etapa as never, preco_m2: p.preco_m2,
+        })),
+      });
+    }
+
+    const tipoPrecoNomeMap: Record<string, string> = {};
+    if (Array.isArray(preco_tipos) && preco_tipos.length > 0) {
+      for (const pt of preco_tipos) {
+        if (!pt.nome?.trim()) continue;
+        const tipo = await (tx as any).preco_tipos.create({
+          data: { obra_id: params.id, nome: String(pt.nome).trim() },
+        });
+        tipoPrecoNomeMap[pt.nome.trim()] = tipo.id;
+        const ptPrecos = Array.isArray(pt.precos) ? pt.precos.filter((p: any) => p.preco_m2 != null && p.preco_m2 !== '') : [];
+        if (ptPrecos.length > 0) {
+          await (tx as any).preco_tipo_precos.createMany({
+            data: ptPrecos.map((p: any) => ({
+              preco_tipo_id: tipo.id, etapa: p.etapa,
+              preco_m2: parseFloat(String(p.preco_m2)) || 0,
+            })),
+          });
+        }
+      }
+    }
+
+    const tiposMap: Record<string, string> = {};
+    if (Array.isArray(apartamento_tipos) && apartamento_tipos.length > 0) {
+      await tx.apartamento_tipos.createMany({
+        data: apartamento_tipos.map((nome: string) => ({ obra_id: params.id, nome: String(nome).trim() })),
+      });
+      const criados = await tx.apartamento_tipos.findMany({ where: { obra_id: params.id } });
+      criados.forEach(t => { tiposMap[t.nome] = t.id; });
+    }
+
+    const mapComodo = (c: any, pavimento_id: string, apartamento_id?: string) => {
+      const paredes: ParedeItem[] = Array.isArray(c.paredes) ? c.paredes : [];
+      const tetos:   TetoItem[]   = Array.isArray(c.tetos)   ? c.tetos   : [];
+      return {
+        pavimento_id, apartamento_id: apartamento_id ?? null,
+        tipo: c.tipo as never, nome: c.nome ?? null,
+        preco_tipo_id: c.preco_tipo_nome ? (tipoPrecoNomeMap[c.preco_tipo_nome] ?? null) : null,
+        paredes: paredes as never,
+        tetos:   tetos   as never,
+        parede1_m2: paredes.reduce((s, p) => s + Number(p.m2), 0) || (c.parede1_m2 ?? 0),
+        parede2_m2: c.parede2_m2 ?? 0,
+        parede3_m2: c.parede3_m2 ?? 0,
+        parede4_m2: c.parede4_m2 ?? 0,
+        teto_m2: tetos.reduce((s, t) => s + Number(t.m2), 0) || (c.teto_m2 ?? 0),
+      };
+    };
+
+    if (Array.isArray(pavimentos) && pavimentos.length > 0) {
+      for (const pav of pavimentos) {
+        const pavimento = await tx.pavimentos.create({
+          data: { obra_id: params.id, nome: pav.nome, numero: Number(pav.numero), tipo: pav.tipo ?? 'pavimento' },
+        });
+        if (Array.isArray(pav.apartamentos) && pav.apartamentos.length > 0) {
+          for (const apt of pav.apartamentos) {
+            const tipo_id = apt.tipo_nome ? (tiposMap[apt.tipo_nome] ?? null) : null;
+            const apartamento = await tx.apartamentos.create({
+              data: {
+                pavimento_id: pavimento.id, tipo_id,
+                preco_tipo_id: apt.preco_tipo_nome ? (tipoPrecoNomeMap[apt.preco_tipo_nome] ?? null) : null,
+                nome: apt.nome ?? null, numero: apt.numero != null ? Number(apt.numero) : null,
+              },
+            });
+            if (Array.isArray(apt.comodos) && apt.comodos.length > 0) {
+              await tx.comodos.createMany({ data: apt.comodos.map((c: any) => mapComodo(c, pavimento.id, apartamento.id)) });
+            }
+          }
+        }
+        if (Array.isArray(pav.comodos) && pav.comodos.length > 0) {
+          await tx.comodos.createMany({ data: pav.comodos.map((c: any) => mapComodo(c, pavimento.id)) });
+        }
+      }
+    }
+
+    return tx.obras.findUnique({
+      where: { id: params.id },
+      include: { obra_precos: true, preco_tipos: { include: { precos: true } }, apartamento_tipos: true, pavimentos: { include: pavimentoInclude } },
+    });
+  });
+
+  return res.status(200).json({ message: 'Orçamento preenchido com sucesso', data });
 }
 
 // ── Obras (editar/excluir) ────────────────────────────────────────────────────
 
 async function atualizarObra(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
-  const { nome, local, empreiteira, precos } = req.body ?? {};
+  const { nome, local, empreiteira, precos, status, data_inicio, previsao_conclusao } = req.body ?? {};
   const obra = await prisma.obras.findUnique({ where: { id: params.id } });
   if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
 
@@ -322,9 +507,12 @@ async function atualizarObra(req: VercelRequest, res: VercelResponse, params: Re
       where: { id: params.id },
       data: {
         ...(nome && { nome: String(nome) }),
-        ...('local'       in (req.body ?? {}) && { local:       local       ? String(local)       : null }),
-        ...('empreiteira' in (req.body ?? {}) && { empreiteira: empreiteira ? String(empreiteira) : null }),
-      },
+        ...('local'               in (req.body ?? {}) && { local:               local               ? String(local)       : null }),
+        ...('empreiteira'         in (req.body ?? {}) && { empreiteira:         empreiteira         ? String(empreiteira) : null }),
+        ...('status'              in (req.body ?? {}) && { status:              status              ? String(status)      : 'ativo' }),
+        ...('data_inicio'         in (req.body ?? {}) && { data_inicio:         data_inicio         ? new Date(data_inicio)         : null }),
+        ...('previsao_conclusao'  in (req.body ?? {}) && { previsao_conclusao:  previsao_conclusao  ? new Date(previsao_conclusao)  : null }),
+      } as never,
     });
     if (Array.isArray(precos)) {
       await tx.obra_precos.deleteMany({ where: { obra_id: params.id } });
@@ -847,6 +1035,7 @@ export const routes: Route[] = [
   { method: 'GET',    path: '/obras/:id',                       handler: getObra                  },
   { method: 'PUT',    path: '/obras/:id',                       handler: atualizarObra            },
   { method: 'DELETE', path: '/obras/:id',                       handler: excluirObra              },
+  { method: 'POST',   path: '/obras/:id/orcamento',             handler: preencherOrcamento       },
   { method: 'GET',    path: '/obras/:id/apartamento-tipos',     handler: listarApartamentoTipos   },
   { method: 'POST',   path: '/obras/:id/apartamento-tipos',     handler: criarApartamentoTipo     },
   { method: 'PUT',    path: '/apartamento-tipos/:id',           handler: atualizarApartamentoTipo },

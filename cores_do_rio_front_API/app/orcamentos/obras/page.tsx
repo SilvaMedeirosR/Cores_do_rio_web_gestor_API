@@ -41,11 +41,12 @@ type EtapaKey = "massa_parede" | "massa_teto" | "lixacao" | "pintura" | "acabame
 interface Empreiteira     { id: string; nome: string; }
 interface ParedeInput     { m2: string; cor: string; }
 interface TetoInput       { m2: string; }
-interface ComodoForm      { tipo: string; nome: string; paredes: ParedeInput[]; tetos: TetoInput[]; }
-interface ApartamentoForm { nome: string; numero: string; tipo_nome: string; comodos: ComodoForm[]; }
+interface PrecoTipoForm   { nome: string; precos: Record<string, string>; }
+interface ComodoForm      { tipo: string; nome: string; paredes: ParedeInput[]; tetos: TetoInput[]; preco_tipo_nome: string; }
+interface ApartamentoForm { nome: string; numero: string; tipo_nome: string; preco_tipo_nome: string; comodos: ComodoForm[]; }
 interface PavimentoForm   { nome: string; numero: string; tipo: string; apartamentos: ApartamentoForm[]; comodos: ComodoForm[]; }
 interface PrecoForm        { etapa: string; preco_m2: string; }
-interface ObraForm         { nome: string; local: string; empreiteira_id: string; nova_empreiteira: string; precos: PrecoForm[]; pavimentos: PavimentoForm[]; apartamento_tipos: string[]; }
+interface ObraForm         { nome: string; local: string; empreiteira_id: string; nova_empreiteira: string; precos: PrecoForm[]; preco_tipos: PrecoTipoForm[]; pavimentos: PavimentoForm[]; apartamento_tipos: string[]; }
 
 interface ObraLista {
   id: string; nome: string; local: string | null; empreiteira: string | null;
@@ -55,10 +56,11 @@ interface ObraLista {
   pavimentos: { id: string; nome: string; comodos: { id: string }[] }[];
 }
 
-const emptyComodo      = (): ComodoForm      => ({ tipo: "sala", nome: "", paredes: [{ m2: "", cor: "" }], tetos: [{ m2: "" }] });
-const emptyApartamento = (): ApartamentoForm => ({ nome: "", numero: "", tipo_nome: "", comodos: [emptyComodo()] });
+const emptyPrecoTipo   = (): PrecoTipoForm   => ({ nome: "", precos: Object.fromEntries(ETAPAS.map(e => [e.value, ""])) });
+const emptyComodo      = (): ComodoForm      => ({ tipo: "sala", nome: "", paredes: [{ m2: "", cor: "" }], tetos: [{ m2: "" }], preco_tipo_nome: "" });
+const emptyApartamento = (): ApartamentoForm => ({ nome: "", numero: "", tipo_nome: "", preco_tipo_nome: "", comodos: [emptyComodo()] });
 const emptyPavimento   = (): PavimentoForm   => ({ nome: "", numero: "", tipo: "pavimento", apartamentos: [], comodos: [] });
-const emptyForm        = (): ObraForm        => ({ nome: "", local: "", empreiteira_id: "", nova_empreiteira: "", precos: ETAPAS.map(e => ({ etapa: e.value, preco_m2: "" })), pavimentos: [emptyPavimento()], apartamento_tipos: [] });
+const emptyForm        = (): ObraForm        => ({ nome: "", local: "", empreiteira_id: "", nova_empreiteira: "", precos: ETAPAS.map(e => ({ etapa: e.value, preco_m2: "" })), preco_tipos: [], pavimentos: [emptyPavimento()], apartamento_tipos: [] });
 
 const n   = (v: string) => parseFloat(v) || 0;
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -231,6 +233,9 @@ export default function ObrasPage() {
   const [busca, setBusca]             = useState("");
   const [pavCollapsed, setPavCollapsed] = useState<Record<number, boolean>>({});
   const [aptCollapsed, setAptCollapsed] = useState<Record<string, boolean>>({});
+  const [showPTApt,       setShowPTApt]       = useState<Record<string,boolean>>({});
+  const [showPTComApt,    setShowPTComApt]    = useState<Record<string,boolean>>({});
+  const [showPTComAvulso, setShowPTComAvulso] = useState<Record<string,boolean>>({});
 
   const togglePav = (pi: number) => setPavCollapsed(p => ({ ...p, [pi]: !p[pi] }));
   const toggleApt = (pi: number, ai: number) => setAptCollapsed(p => { const k = `${pi}-${ai}`; return { ...p, [k]: !p[k] }; });
@@ -277,9 +282,15 @@ export default function ObrasPage() {
   // apartamentos do pavimento
   const addApt    = (pi: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: [...a[pi].apartamentos, emptyApartamento()] }; return { ...p, pavimentos: a }; });
   const removeApt = (pi: number, ai: number) => setForm(p => { const a = [...p.pavimentos]; a[pi] = { ...a[pi], apartamentos: a[pi].apartamentos.filter((_, i) => i !== ai) }; return { ...p, pavimentos: a }; });
-  const setAptField = (pi: number, ai: number, f: keyof Pick<ApartamentoForm, "nome" | "numero" | "tipo_nome">, v: string) => setForm(p => {
+  const setAptField = (pi: number, ai: number, f: keyof Pick<ApartamentoForm, "nome" | "numero" | "tipo_nome" | "preco_tipo_nome">, v: string) => setForm(p => {
     const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], [f]: v }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a };
   });
+
+  // preco_tipos
+  const addPrecoTipo    = () => setForm(p => ({ ...p, preco_tipos: [...p.preco_tipos, emptyPrecoTipo()] }));
+  const removePrecoTipo = (ti: number) => setForm(p => ({ ...p, preco_tipos: p.preco_tipos.filter((_, i) => i !== ti) }));
+  const setPTNome       = (ti: number, v: string) => setForm(p => { const a = [...p.preco_tipos]; a[ti] = { ...a[ti], nome: v }; return { ...p, preco_tipos: a }; });
+  const setPTPreco      = (ti: number, etapa: string, v: string) => setForm(p => { const a = [...p.preco_tipos]; a[ti] = { ...a[ti], precos: { ...a[ti].precos, [etapa]: v } }; return { ...p, preco_tipos: a }; });
 
   // cômodos dentro de um apartamento
   const addComodoApt    = (pi: number, ai: number) => setForm(p => { const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; apts[ai] = { ...apts[ai], comodos: [...apts[ai].comodos, emptyComodo()] }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a }; });
@@ -355,6 +366,7 @@ export default function ObrasPage() {
         tipo: c.tipo, nome: c.nome || null,
         paredes: c.paredes.map(p => ({ m2: n(p.m2), cor: p.cor || null })),
         tetos:   c.tetos.map(t => ({ m2: n(t.m2) })),
+        preco_tipo_nome: c.preco_tipo_nome || null,
       });
 
       const payload = {
@@ -362,6 +374,11 @@ export default function ObrasPage() {
         local: form.local || null,
         empreiteira_id: empreiteiraId,
         precos: form.precos.filter(p => p.preco_m2 !== "").map(p => ({ etapa: p.etapa, preco_m2: n(p.preco_m2) })),
+        preco_tipos: form.preco_tipos.filter(t => t.nome.trim()).map(t => ({
+          nome: t.nome.trim(),
+          precos: ETAPAS.filter(e => t.precos[e.value] !== "" && t.precos[e.value] != null)
+            .map(e => ({ etapa: e.value, preco_m2: n(t.precos[e.value]) })),
+        })),
         apartamento_tipos: form.apartamento_tipos.filter(t => t.trim() !== ""),
         pavimentos: form.pavimentos.map(pav => ({
           nome: pav.nome,
@@ -371,6 +388,7 @@ export default function ObrasPage() {
             nome: apt.nome || null,
             numero: apt.numero ? parseInt(apt.numero) : null,
             tipo_nome: apt.tipo_nome || null,
+            preco_tipo_nome: apt.preco_tipo_nome || null,
             comodos: apt.comodos.map(mapComodo),
           })),
           comodos: pav.comodos.map(mapComodo),
@@ -477,6 +495,57 @@ export default function ObrasPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Tipos de Preço */}
+          <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider">Tipos de Preço</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Opcional · grupos de preço/m² alternativos ao padrão (ex: Tinta Epóxi, Massa Premium)</p>
+              </div>
+              <button type="button" onClick={addPrecoTipo}
+                className="text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 hover:border-orange-400 px-3 py-1.5 rounded-lg transition-colors">
+                + Tipo de Preço
+              </button>
+            </div>
+            {form.preco_tipos.length === 0 ? (
+              <p className="text-xs text-zinc-400 italic">Nenhum tipo definido. Tipos permitem preços distintos por etapa para grupos específicos de cômodos.</p>
+            ) : (
+              <div className="space-y-3">
+                {form.preco_tipos.map((pt, ti) => (
+                  <div key={ti} className="border border-amber-100 rounded-lg p-3 bg-amber-50/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <input value={pt.nome} onChange={e => setPTNome(ti, e.target.value)}
+                        className={`flex-1 min-w-32 ${INPUT_SM}`} placeholder="Ex: Tinta Epóxi, Massa Premium..." />
+                      <button type="button" onClick={() => removePrecoTipo(ti)}
+                        className="text-zinc-300 hover:text-red-400 text-lg leading-none px-1">×</button>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-2">Preços/m² — deixe em branco para usar o padrão da obra nessa etapa:</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {ETAPAS.map(et => {
+                        const geralStr = form.precos.find(p => p.etapa === et.value)?.preco_m2;
+                        return (
+                          <div key={et.value}>
+                            <label className="block text-xs font-medium text-zinc-500 mb-1">
+                              {et.label}
+                              {geralStr && <span className="text-zinc-300 font-normal ml-1">({fmt(n(geralStr))})</span>}
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs pointer-events-none">R$</span>
+                              <input type="number" step="0.01" min="0" value={pt.precos[et.value] ?? ""}
+                                onChange={e => setPTPreco(ti, et.value, e.target.value)}
+                                className="w-full border border-zinc-200 rounded-lg pl-6 pr-2 py-1.5 text-xs text-zinc-900 bg-white placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                placeholder="—" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tipos de Apartamento */}
@@ -596,6 +665,30 @@ export default function ObrasPage() {
                                         <option key={t} value={t}>{t}</option>
                                       ))}
                                     </select>
+                                    {form.preco_tipos.filter(t => t.nome.trim()).length > 0 && (
+                                      !showPTApt[`${pi}-${ai}`] ? (
+                                        <button type="button"
+                                          onClick={() => setShowPTApt(p => ({...p, [`${pi}-${ai}`]: true}))}
+                                          className="text-xs text-zinc-400 hover:text-zinc-600 flex items-center gap-0.5 whitespace-nowrap">
+                                          <span>Personalizar preço</span>
+                                          <ChevronDown size={11}/>
+                                        </button>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <select value={apt.preco_tipo_nome}
+                                            onChange={e => setAptField(pi, ai, "preco_tipo_nome", e.target.value)}
+                                            className="border border-amber-200 rounded-lg px-2 py-1.5 text-xs text-zinc-900 bg-amber-50/50 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                            <option value="">— Padrão geral —</option>
+                                            {form.preco_tipos.filter(t => t.nome.trim()).map(t => (
+                                              <option key={t.nome} value={t.nome}>{t.nome}</option>
+                                            ))}
+                                          </select>
+                                          <button type="button"
+                                            onClick={() => { setShowPTApt(p => ({...p, [`${pi}-${ai}`]: false})); setAptField(pi, ai, "preco_tipo_nome", ""); }}
+                                            className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                        </div>
+                                      )
+                                    )}
                                     {aptCollapsed[`${pi}-${ai}`] && apt.comodos.length > 0 && (
                                       <span className="text-xs text-zinc-400 whitespace-nowrap">{apt.comodos.length} cômodo{apt.comodos.length !== 1 ? "s" : ""}</span>
                                     )}
@@ -676,6 +769,32 @@ export default function ObrasPage() {
                                               </div>
                                             ))}
                                           </div>
+                                          {/* Tipo de preço */}
+                                          {form.preco_tipos.filter(t => t.nome.trim()).length > 0 && (
+                                            !showPTComApt[`${pi}-${ai}-${ci}`] ? (
+                                              <button type="button"
+                                                onClick={() => setShowPTComApt(p => ({...p, [`${pi}-${ai}-${ci}`]: true}))}
+                                                className="text-xs text-zinc-400 hover:text-zinc-600 flex items-center gap-0.5">
+                                                <span>Personalizar preço</span>
+                                                <ChevronDown size={11}/>
+                                              </button>
+                                            ) : (
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-xs text-zinc-400 shrink-0">Tipo de preço:</span>
+                                                <select value={c.preco_tipo_nome}
+                                                  onChange={e => updComodoApt(pi, ai, ci, c => ({...c, preco_tipo_nome: e.target.value}))}
+                                                  className="flex-1 min-w-32 border border-amber-200 rounded-lg px-2 py-1 text-xs text-zinc-900 bg-amber-50/50 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                                  <option value="">— Padrão geral —</option>
+                                                  {form.preco_tipos.filter(t => t.nome.trim()).map(t => (
+                                                    <option key={t.nome} value={t.nome}>{t.nome}</option>
+                                                  ))}
+                                                </select>
+                                                <button type="button"
+                                                  onClick={() => { setShowPTComApt(p => ({...p, [`${pi}-${ai}-${ci}`]: false})); updComodoApt(pi, ai, ci, c => ({...c, preco_tipo_nome: ""})); }}
+                                                  className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                              </div>
+                                            )
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -762,6 +881,32 @@ export default function ObrasPage() {
                                       </div>
                                     ))}
                                   </div>
+                                  {/* Tipo de preço */}
+                                  {form.preco_tipos.filter(t => t.nome.trim()).length > 0 && (
+                                    !showPTComAvulso[`${pi}-${ci}`] ? (
+                                      <button type="button"
+                                        onClick={() => setShowPTComAvulso(p => ({...p, [`${pi}-${ci}`]: true}))}
+                                        className="text-xs text-zinc-400 hover:text-zinc-600 flex items-center gap-0.5">
+                                        <span>Personalizar preço</span>
+                                        <ChevronDown size={11}/>
+                                      </button>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs text-zinc-400 shrink-0">Tipo de preço:</span>
+                                        <select value={c.preco_tipo_nome}
+                                          onChange={e => updComodoAvulso(pi, ci, c => ({...c, preco_tipo_nome: e.target.value}))}
+                                          className="flex-1 min-w-32 border border-amber-200 rounded-lg px-2 py-1 text-xs text-zinc-900 bg-amber-50/50 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                          <option value="">— Padrão geral —</option>
+                                          {form.preco_tipos.filter(t => t.nome.trim()).map(t => (
+                                            <option key={t.nome} value={t.nome}>{t.nome}</option>
+                                          ))}
+                                        </select>
+                                        <button type="button"
+                                          onClick={() => { setShowPTComAvulso(p => ({...p, [`${pi}-${ci}`]: false})); updComodoAvulso(pi, ci, c => ({...c, preco_tipo_nome: ""})); }}
+                                          className="text-zinc-300 hover:text-red-400 text-sm leading-none">✕</button>
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               );
                             })}

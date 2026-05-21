@@ -201,7 +201,7 @@ async function getObra(_req: VercelRequest, res: VercelResponse, params: Record<
 // ── Obras (criar) ─────────────────────────────────────────────────────────────
 
 async function criarObra(req: VercelRequest, res: VercelResponse) {
-  const { nome, local, empreiteira, empreiteira_id, pavimentos, apartamento_tipos } = req.body ?? {};
+  const { nome, local, empreiteira, empreiteira_id, pavimentos, apartamento_tipos, preco_tipos } = req.body ?? {};
   if (!nome) return res.status(400).json({ error: 'nome e obrigatorio' });
 
   const data = await prisma.$transaction(async (tx) => {
@@ -223,6 +223,28 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // criar preco_tipos e mapear nome → id
+    const tipoPrecoNomeMap: Record<string, string> = {};
+    if (Array.isArray(preco_tipos) && preco_tipos.length > 0) {
+      for (const pt of preco_tipos) {
+        if (!pt.nome?.trim()) continue;
+        const tipo = await (tx as any).preco_tipos.create({
+          data: { obra_id: obra.id, nome: String(pt.nome).trim() },
+        });
+        tipoPrecoNomeMap[pt.nome.trim()] = tipo.id;
+        const ptPrecos = Array.isArray(pt.precos) ? pt.precos.filter((p: any) => p.preco_m2 != null && p.preco_m2 !== '') : [];
+        if (ptPrecos.length > 0) {
+          await (tx as any).preco_tipo_precos.createMany({
+            data: ptPrecos.map((p: any) => ({
+              preco_tipo_id: tipo.id,
+              etapa: p.etapa,
+              preco_m2: parseFloat(String(p.preco_m2)) || 0,
+            })),
+          });
+        }
+      }
+    }
+
     const tiposMap: Record<string, string> = {};
     if (Array.isArray(apartamento_tipos) && apartamento_tipos.length > 0) {
       await tx.apartamento_tipos.createMany({
@@ -237,6 +259,7 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
       apartamento_id: apartamento_id ?? null,
       tipo: c.tipo as never,
       nome: c.nome ?? null,
+      preco_tipo_id: c.preco_tipo_nome ? (tipoPrecoNomeMap[c.preco_tipo_nome] ?? null) : null,
       parede1_m2: c.parede1_m2 ?? 0,
       parede2_m2: c.parede2_m2 ?? 0,
       parede3_m2: c.parede3_m2 ?? 0,
@@ -257,6 +280,7 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
               data: {
                 pavimento_id: pavimento.id,
                 tipo_id,
+                preco_tipo_id: apt.preco_tipo_nome ? (tipoPrecoNomeMap[apt.preco_tipo_nome] ?? null) : null,
                 nome: apt.nome ?? null,
                 numero: apt.numero != null ? Number(apt.numero) : null,
               },

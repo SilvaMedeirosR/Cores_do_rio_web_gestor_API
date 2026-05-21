@@ -16,9 +16,9 @@ const INPUT_SM = "border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zin
 
 type EtapaKey = "massa_parede"|"massa_teto"|"lixacao"|"pintura"|"acabamento";
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
-interface Comodo { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; orcamento:OrcComodo; }
+interface Comodo { id:string; tipo:string; nome:string|null; parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number; orcamento:OrcComodo; preco_tipo_id:string|null; preco_tipo_nome:string|null; }
 interface ApartamentoTipo { id:string; nome:string; }
-interface Apartamento { id:string; nome:string|null; numero:number|null; tipo_id:string|null; apartamento_tipos:ApartamentoTipo|null; comodos:Comodo[]; orcamento_total:number; }
+interface Apartamento { id:string; nome:string|null; numero:number|null; tipo_id:string|null; preco_tipo_nome:string|null; apartamento_tipos:ApartamentoTipo|null; comodos:Comodo[]; orcamento_total:number; }
 interface Pavimento { id:string; nome:string; numero:number; tipo:string; comodos:Comodo[]; apartamentos:Apartamento[]; orcamento_total:number; }
 interface Obra { id:string; nome:string; local:string; created_at:string; orcamento_total:number; obra_precos:{etapa:string;preco_m2:number}[]; pavimentos:Pavimento[]; apartamento_tipos:ApartamentoTipo[]; }
 
@@ -222,7 +222,14 @@ export default function ObraDetailPage() {
                   {pav.apartamentos.map(apt => (
                     <div key={apt.id}>
                       <div className="px-4 sm:px-6 py-2.5 bg-blue-50/40 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-blue-800">{aptLabel(apt)}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-blue-800">{aptLabel(apt)}</span>
+                          {apt.preco_tipo_nome && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              {apt.preco_tipo_nome}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs font-bold text-orange-600 tabular-nums">{fmt(apt.orcamento_total)}</span>
                       </div>
                       {apt.comodos.length > 0 && (
@@ -232,7 +239,14 @@ export default function ObraDetailPage() {
                               {apt.comodos.map(c => (
                                 <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
                                   <td className="px-6 py-2.5">
-                                    <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                      {c.preco_tipo_nome && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                          {c.preco_tipo_nome}
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
                                   </td>
                                   <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.orcamento.total_paredes)} m²</td>
@@ -262,7 +276,14 @@ export default function ObraDetailPage() {
                             {pav.comodos.map(c => (
                               <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
                                 <td className="px-6 py-2.5">
-                                  <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <div className="font-medium text-zinc-800 text-sm">{c.nome || TIPO_LABELS[c.tipo] || c.tipo}</div>
+                                    {c.preco_tipo_nome && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                        {c.preco_tipo_nome}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="text-xs text-zinc-400">{TIPO_LABELS[c.tipo]}</div>
                                 </td>
                                 <td className="px-3 py-2.5 text-right text-xs text-zinc-500 tabular-nums">{fmtN(c.orcamento.total_paredes)} m²</td>

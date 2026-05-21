@@ -47,29 +47,53 @@ function buildPrecoMap(obra_precos: { etapa: string; preco_m2: unknown }[]): Pre
   return Object.fromEntries(obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
 }
 
+function buildPrecoTiposMap(precoTipos: { id: string; precos: { etapa: string; preco_m2: unknown }[] }[]): Record<string, PrecoMap> {
+  return Object.fromEntries(precoTipos.map(t => [t.id, buildPrecoMap(t.precos)]));
+}
+
+// Cascata: tipo do entity sobrescreve apenas as etapas definidas, o resto cai no basePrecos
+function resolvePrecos(tipoId: string | null | undefined, precoTiposMap: Record<string, PrecoMap>, basePrecos: PrecoMap): PrecoMap {
+  if (tipoId && precoTiposMap[tipoId]) {
+    return { ...basePrecos, ...precoTiposMap[tipoId] };
+  }
+  return basePrecos;
+}
+
 // enriquece pavimento com cômodos avulsos + apartamentos calculados
-function enrichPavimento(pav: any, precos: PrecoMap) {
+// Cascata de preços: cômodo > apartamento > pavimento > obra (geral)
+function enrichPavimento(pav: any, obraPrecos: PrecoMap, precoTiposMap: Record<string, PrecoMap>, tipoNomeMap: Record<string, string>) {
+  const pavPrecos = resolvePrecos(pav.preco_tipo_id, precoTiposMap, obraPrecos);
   let pavTotal = 0;
 
   const comodos = (pav.comodos ?? []).map((c: any) => {
-    const orc = calcComodo(c, precos);
+    const efetivos = resolvePrecos(c.preco_tipo_id, precoTiposMap, pavPrecos);
+    const orc = calcComodo(c, efetivos);
     pavTotal += orc.total;
-    return { ...c, orcamento: orc };
+    return { ...c, orcamento: orc, preco_tipo_nome: c.preco_tipo_id ? (tipoNomeMap[c.preco_tipo_id] ?? null) : null };
   });
 
   const apartamentos = (pav.apartamentos ?? []).map((apt: any) => {
+    const aptPrecos = resolvePrecos(apt.preco_tipo_id, precoTiposMap, pavPrecos);
     let aptTotal = 0;
     const aptComodos = (apt.comodos ?? []).map((c: any) => {
-      const orc = calcComodo(c, precos);
+      const efetivos = resolvePrecos(c.preco_tipo_id, precoTiposMap, aptPrecos);
+      const orc = calcComodo(c, efetivos);
       aptTotal += orc.total;
-      return { ...c, orcamento: orc };
+      return { ...c, orcamento: orc, preco_tipo_nome: c.preco_tipo_id ? (tipoNomeMap[c.preco_tipo_id] ?? null) : null };
     });
     pavTotal += aptTotal;
-    return { ...apt, comodos: aptComodos, orcamento_total: aptTotal };
+    return {
+      ...apt,
+      comodos: aptComodos,
+      orcamento_total: aptTotal,
+      preco_tipo_nome: apt.preco_tipo_id ? (tipoNomeMap[apt.preco_tipo_id] ?? null) : null,
+    };
   });
 
   return { ...pav, comodos, apartamentos, orcamento_total: pavTotal };
 }
+
+const precoTiposInclude = { include: { precos: true } } as const;
 
 const pavimentoInclude = {
   comodos:      { where: { apartamento_id: null }, orderBy: { created_at: 'asc' as const } },
@@ -126,15 +150,18 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
     orderBy: { created_at: 'desc' },
     include: {
       obra_precos: true,
+      preco_tipos: { include: { precos: true } },
       pavimentos: { orderBy: { numero: 'asc' }, include: pavimentoInclude },
     },
   });
 
   const data = obras.map(o => {
-    const precos = buildPrecoMap(o.obra_precos);
+    const precos        = buildPrecoMap(o.obra_precos);
+    const precoTiposMap = buildPrecoTiposMap(o.preco_tipos as any);
+    const tipoNomeMap   = Object.fromEntries((o.preco_tipos as any[]).map((t: any) => [t.id, t.nome]));
     let obraTotal = 0;
     const pavimentos = o.pavimentos.map(pav => {
-      const enriched = enrichPavimento(pav, precos);
+      const enriched = enrichPavimento(pav, precos, precoTiposMap, tipoNomeMap);
       obraTotal += enriched.orcamento_total;
       return enriched;
     });
@@ -151,16 +178,19 @@ async function getObra(_req: VercelRequest, res: VercelResponse, params: Record<
     where: { id: params.id },
     include: {
       obra_precos: true,
+      preco_tipos: { include: { precos: true } },
       apartamento_tipos: { orderBy: { nome: 'asc' } },
       pavimentos: { orderBy: { numero: 'asc' }, include: pavimentoInclude },
     },
   });
   if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
 
-  const precos = buildPrecoMap(obra.obra_precos);
+  const precos        = buildPrecoMap(obra.obra_precos);
+  const precoTiposMap = buildPrecoTiposMap(obra.preco_tipos as any);
+  const tipoNomeMap   = Object.fromEntries((obra.preco_tipos as any[]).map((t: any) => [t.id, t.nome]));
   let obraTotal = 0;
   const pavimentos = obra.pavimentos.map(pav => {
-    const enriched = enrichPavimento(pav, precos);
+    const enriched = enrichPavimento(pav, precos, precoTiposMap, tipoNomeMap);
     obraTotal += enriched.orcamento_total;
     return enriched;
   });
@@ -220,7 +250,6 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
           data: { obra_id: obra.id, nome: pav.nome, numero: Number(pav.numero), tipo: pav.tipo ?? 'pavimento' },
         });
 
-        // apartamentos com seus cômodos
         if (Array.isArray(pav.apartamentos) && pav.apartamentos.length > 0) {
           for (const apt of pav.apartamentos) {
             const tipo_id = apt.tipo_nome ? (tiposMap[apt.tipo_nome] ?? null) : null;
@@ -240,7 +269,6 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        // cômodos avulsos (sem apartamento)
         if (Array.isArray(pav.comodos) && pav.comodos.length > 0) {
           await tx.comodos.createMany({
             data: pav.comodos.map((c: any) => mapComodo(c, pavimento.id)),
@@ -251,7 +279,7 @@ async function criarObra(req: VercelRequest, res: VercelResponse) {
 
     return tx.obras.findUnique({
       where: { id: obra.id },
-      include: { obra_precos: true, apartamento_tipos: true, pavimentos: { include: pavimentoInclude } },
+      include: { obra_precos: true, preco_tipos: { include: { precos: true } }, apartamento_tipos: true, pavimentos: { include: pavimentoInclude } },
     });
   });
 
@@ -288,7 +316,7 @@ async function atualizarObra(req: VercelRequest, res: VercelResponse, params: Re
 
   const data = await prisma.obras.findUnique({
     where: { id: params.id },
-    include: { obra_precos: true, apartamento_tipos: true, pavimentos: { orderBy: { numero: 'asc' }, include: pavimentoInclude } },
+    include: { obra_precos: true, preco_tipos: { include: { precos: true } }, apartamento_tipos: true, pavimentos: { orderBy: { numero: 'asc' }, include: pavimentoInclude } },
   });
   return res.status(200).json({ message: 'Obra atualizada com sucesso', data });
 }
@@ -308,6 +336,76 @@ async function excluirObra(_req: VercelRequest, res: VercelResponse, params: Rec
     await tx.obras.delete({ where: { id: params.id } });
   });
   return res.status(200).json({ message: 'Obra excluida com sucesso' });
+}
+
+// ── Preco Tipos ───────────────────────────────────────────────────────────────
+
+async function listarPrecoTipos(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const data = await (prisma as any).preco_tipos.findMany({
+    where: { obra_id: params.id },
+    include: { precos: true },
+    orderBy: { nome: 'asc' },
+  });
+  return res.status(200).json({ data });
+}
+
+async function criarPrecoTipo(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const { nome, precos } = req.body ?? {};
+  if (!nome) return res.status(400).json({ error: 'nome e obrigatorio' });
+  const obra = await prisma.obras.findUnique({ where: { id: params.id } });
+  if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
+
+  const data = await prisma.$transaction(async (tx) => {
+    const tipo = await (tx as any).preco_tipos.create({
+      data: { obra_id: params.id, nome: String(nome).trim() },
+    });
+    if (Array.isArray(precos) && precos.length > 0) {
+      const validos = precos.filter((p: any) => p.preco_m2 !== '' && p.preco_m2 != null);
+      if (validos.length > 0) {
+        await (tx as any).preco_tipo_precos.createMany({
+          data: validos.map((p: any) => ({
+            preco_tipo_id: tipo.id,
+            etapa: p.etapa,
+            preco_m2: parseFloat(String(p.preco_m2)) || 0,
+          })),
+        });
+      }
+    }
+    return (tx as any).preco_tipos.findUnique({ where: { id: tipo.id }, include: { precos: true } });
+  });
+
+  return res.status(201).json({ message: 'Tipo de preco criado', data });
+}
+
+async function atualizarPrecoTipo(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  const { nome, precos } = req.body ?? {};
+  const tipo = await (prisma as any).preco_tipos.findUnique({ where: { id: params.id } });
+  if (!tipo) return res.status(404).json({ error: 'Tipo nao encontrado' });
+
+  await prisma.$transaction(async (tx) => {
+    if (nome) await (tx as any).preco_tipos.update({ where: { id: params.id }, data: { nome: String(nome).trim() } });
+    if (Array.isArray(precos)) {
+      await (tx as any).preco_tipo_precos.deleteMany({ where: { preco_tipo_id: params.id } });
+      const validos = precos.filter((p: any) => p.preco_m2 !== '' && p.preco_m2 != null);
+      if (validos.length > 0) {
+        await (tx as any).preco_tipo_precos.createMany({
+          data: validos.map((p: any) => ({
+            preco_tipo_id: params.id,
+            etapa: p.etapa,
+            preco_m2: parseFloat(String(p.preco_m2)) || 0,
+          })),
+        });
+      }
+    }
+  });
+
+  const data = await (prisma as any).preco_tipos.findUnique({ where: { id: params.id }, include: { precos: true } });
+  return res.status(200).json({ data });
+}
+
+async function excluirPrecoTipo(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
+  await (prisma as any).preco_tipos.delete({ where: { id: params.id } });
+  return res.status(200).json({ message: 'Tipo excluido' });
 }
 
 // ── Apartamento Tipos ─────────────────────────────────────────────────────────
@@ -350,15 +448,16 @@ async function excluirApartamentoTipo(_req: VercelRequest, res: VercelResponse, 
 // ── Apartamentos ──────────────────────────────────────────────────────────────
 
 async function adicionarApartamento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
-  const { nome, numero, tipo_id } = req.body ?? {};
+  const { nome, numero, tipo_id, preco_tipo_id } = req.body ?? {};
   const pav = await prisma.pavimentos.findUnique({ where: { id: params.id } });
   if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
   const data = await prisma.apartamentos.create({
     data: {
-      pavimento_id: params.id,
-      tipo_id:      tipo_id ?? null,
-      nome:         nome    ?? null,
-      numero:       numero  != null ? Number(numero) : null,
+      pavimento_id:  params.id,
+      tipo_id:       tipo_id       ?? null,
+      preco_tipo_id: preco_tipo_id ?? null,
+      nome:          nome          ?? null,
+      numero:        numero        != null ? Number(numero) : null,
     },
     include: { apartamento_tipos: { select: { id: true, nome: true } }, comodos: true },
   });
@@ -371,14 +470,29 @@ async function getApartamento(_req: VercelRequest, res: VercelResponse, params: 
     include: {
       apartamento_tipos: true,
       comodos: { orderBy: { created_at: 'asc' } },
-      pavimentos: { include: { obras: { include: { obra_precos: true } } } },
+      pavimentos: {
+        include: {
+          obras: {
+            include: {
+              obra_precos: true,
+              preco_tipos: { include: { precos: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!apt) return res.status(404).json({ error: 'Apartamento nao encontrado' });
-  const precos = buildPrecoMap(apt.pavimentos.obras.obra_precos);
+
+  const obraPrecos    = buildPrecoMap(apt.pavimentos.obras.obra_precos);
+  const precoTiposMap = buildPrecoTiposMap(apt.pavimentos.obras.preco_tipos as any);
+  const pavPrecos     = resolvePrecos((apt.pavimentos as any).preco_tipo_id, precoTiposMap, obraPrecos);
+  const aptPrecos     = resolvePrecos((apt as any).preco_tipo_id, precoTiposMap, pavPrecos);
+
   let aptTotal = 0;
   const comodos = apt.comodos.map(c => {
-    const orc = calcComodo(c, precos);
+    const efetivos = resolvePrecos((c as any).preco_tipo_id, precoTiposMap, aptPrecos);
+    const orc = calcComodo(c, efetivos);
     aptTotal += orc.total;
     return { ...c, orcamento: orc };
   });
@@ -386,15 +500,16 @@ async function getApartamento(_req: VercelRequest, res: VercelResponse, params: 
 }
 
 async function atualizarApartamento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
-  const { nome, numero, tipo_id } = req.body ?? {};
+  const { nome, numero, tipo_id, preco_tipo_id } = req.body ?? {};
   const apt = await prisma.apartamentos.findUnique({ where: { id: params.id } });
   if (!apt) return res.status(404).json({ error: 'Apartamento nao encontrado' });
   const data = await prisma.apartamentos.update({
     where: { id: params.id },
     data: {
-      ...('nome'    in (req.body ?? {}) && { nome:    nome    ?? null }),
-      ...('numero'  in (req.body ?? {}) && { numero:  numero  != null ? Number(numero) : null }),
-      ...('tipo_id' in (req.body ?? {}) && { tipo_id: tipo_id ?? null }),
+      ...('nome'          in (req.body ?? {}) && { nome:          nome          ?? null }),
+      ...('numero'        in (req.body ?? {}) && { numero:        numero        != null ? Number(numero) : null }),
+      ...('tipo_id'       in (req.body ?? {}) && { tipo_id:       tipo_id       ?? null }),
+      ...('preco_tipo_id' in (req.body ?? {}) && { preco_tipo_id: preco_tipo_id ?? null }),
     },
     include: { apartamento_tipos: { select: { id: true, nome: true } }, comodos: true },
   });
@@ -437,27 +552,33 @@ async function clonarPavimento(req: VercelRequest, res: VercelResponse, params: 
 
   await prisma.$transaction(async (tx) => {
     const zerarMedidas = { paredes: [] as never, tetos: [] as never, parede1_m2: 0, parede2_m2: 0, parede3_m2: 0, parede4_m2: 0, teto_m2: 0 };
-    // cômodos avulsos
     for (const c of origem.comodos) {
       await tx.comodos.create({
         data: {
           pavimento_id: params.id, tipo: c.tipo, nome: c.nome ?? null,
+          preco_tipo_id: (c as any).preco_tipo_id ?? null,
           ...(manter_medidas
             ? { paredes: c.paredes as never, tetos: c.tetos as never, parede1_m2: c.parede1_m2, parede2_m2: c.parede2_m2, parede3_m2: c.parede3_m2, parede4_m2: c.parede4_m2, teto_m2: c.teto_m2 }
             : zerarMedidas),
         },
       });
     }
-    // apartamentos
     for (const apt of origem.apartamentos) {
       const novoApt = await tx.apartamentos.create({
-        data: { pavimento_id: params.id, tipo_id: apt.tipo_id ?? null, nome: apt.nome ?? null, numero: apt.numero ?? null },
+        data: {
+          pavimento_id:  params.id,
+          tipo_id:       apt.tipo_id       ?? null,
+          preco_tipo_id: (apt as any).preco_tipo_id ?? null,
+          nome:          apt.nome          ?? null,
+          numero:        apt.numero        ?? null,
+        },
       });
       for (const c of apt.comodos) {
         await tx.comodos.create({
           data: {
             pavimento_id: params.id, apartamento_id: novoApt.id,
             tipo: c.tipo, nome: c.nome ?? null,
+            preco_tipo_id: (c as any).preco_tipo_id ?? null,
             ...(manter_medidas
               ? { paredes: c.paredes as never, tetos: c.tetos as never, parede1_m2: c.parede1_m2, parede2_m2: c.parede2_m2, parede3_m2: c.parede3_m2, parede4_m2: c.parede4_m2, teto_m2: c.teto_m2 }
               : zerarMedidas),
@@ -469,7 +590,7 @@ async function clonarPavimento(req: VercelRequest, res: VercelResponse, params: 
 
   const data = await prisma.pavimentos.findUnique({
     where: { id: params.id },
-    include: { ...pavimentoInclude, obras: { include: { obra_precos: true } } },
+    include: { ...pavimentoInclude, obras: { include: { obra_precos: true, preco_tipos: { include: { precos: true } } } } },
   });
   return res.status(200).json({ message: 'Estrutura clonada com sucesso', data });
 }
@@ -484,6 +605,7 @@ async function getPavimento(_req: VercelRequest, res: VercelResponse, params: Re
       obras: {
         include: {
           obra_precos: true,
+          preco_tipos: { include: { precos: true } },
           apartamento_tipos: { orderBy: { nome: 'asc' } },
           pavimentos: { select: { id: true, nome: true, numero: true }, orderBy: { numero: 'asc' } },
         },
@@ -492,8 +614,10 @@ async function getPavimento(_req: VercelRequest, res: VercelResponse, params: Re
   });
   if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
 
-  const precos   = buildPrecoMap(pav.obras.obra_precos);
-  const enriched = enrichPavimento(pav, precos);
+  const obraPrecos    = buildPrecoMap(pav.obras.obra_precos);
+  const precoTiposMap = buildPrecoTiposMap(pav.obras.preco_tipos as any);
+  const tipoNomeMap   = Object.fromEntries((pav.obras.preco_tipos as any[]).map((t: any) => [t.id, t.nome]));
+  const enriched      = enrichPavimento(pav, obraPrecos, precoTiposMap, tipoNomeMap);
   return res.status(200).json({ data: enriched });
 }
 
@@ -502,24 +626,55 @@ async function getPavimento(_req: VercelRequest, res: VercelResponse, params: Re
 async function getComodo(_req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
   const c = await prisma.comodos.findUnique({
     where: { id: params.id },
-    include: { pavimentos: { include: { obras: { include: { obra_precos: true } } } } },
+    include: {
+      pavimentos: {
+        include: {
+          obras: {
+            include: {
+              obra_precos: true,
+              preco_tipos: { include: { precos: true } },
+            },
+          },
+        },
+      },
+      apartamentos: { select: { preco_tipo_id: true } },
+    },
   });
   if (!c) return res.status(404).json({ error: 'Comodo nao encontrado' });
-  const precos = buildPrecoMap(c.pavimentos.obras.obra_precos);
-  return res.status(200).json({ data: { ...c, orcamento: calcComodo(c, precos) } });
+
+  const obraPrecos    = buildPrecoMap(c.pavimentos.obras.obra_precos);
+  const precoTiposMap = buildPrecoTiposMap(c.pavimentos.obras.preco_tipos as any);
+  const pavPrecos     = resolvePrecos((c.pavimentos as any).preco_tipo_id, precoTiposMap, obraPrecos);
+  const aptPrecos     = resolvePrecos((c.apartamentos as any)?.preco_tipo_id, precoTiposMap, pavPrecos);
+  const efetivos      = resolvePrecos((c as any).preco_tipo_id, precoTiposMap, aptPrecos);
+
+  return res.status(200).json({
+    data: {
+      ...c,
+      orcamento: calcComodo(c, efetivos),
+      precos_efetivos: efetivos,
+      preco_tipos_obra: c.pavimentos.obras.preco_tipos,
+    },
+  });
 }
 
 // ── Pavimentos (criar/editar/excluir) ─────────────────────────────────────────
 
 async function adicionarPavimento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
-  const { nome, numero, tipo, comodos } = req.body ?? {};
+  const { nome, numero, tipo, comodos, preco_tipo_id } = req.body ?? {};
   if (!nome || numero === undefined) return res.status(400).json({ error: 'nome e numero sao obrigatorios' });
   const obra = await prisma.obras.findUnique({ where: { id: params.id } });
   if (!obra) return res.status(404).json({ error: 'Obra nao encontrada' });
 
   const data = await prisma.$transaction(async (tx) => {
     const pav = await tx.pavimentos.create({
-      data: { obra_id: params.id, nome: String(nome), numero: Number(numero), tipo: tipo ?? 'pavimento' },
+      data: {
+        obra_id: params.id,
+        nome:    String(nome),
+        numero:  Number(numero),
+        tipo:    tipo ?? 'pavimento',
+        preco_tipo_id: preco_tipo_id ?? null,
+      },
     });
     if (Array.isArray(comodos) && comodos.length > 0) {
       await tx.comodos.createMany({
@@ -537,7 +692,7 @@ async function adicionarPavimento(req: VercelRequest, res: VercelResponse, param
 }
 
 async function atualizarPavimento(req: VercelRequest, res: VercelResponse, params: Record<string, string>) {
-  const { nome, numero } = req.body ?? {};
+  const { nome, numero, preco_tipo_id } = req.body ?? {};
   const pav = await prisma.pavimentos.findUnique({ where: { id: params.id } });
   if (!pav) return res.status(404).json({ error: 'Pavimento nao encontrado' });
   const data = await prisma.pavimentos.update({
@@ -545,6 +700,7 @@ async function atualizarPavimento(req: VercelRequest, res: VercelResponse, param
     data: {
       ...(nome && { nome: String(nome) }),
       ...(numero !== undefined && { numero: Number(numero) }),
+      ...('preco_tipo_id' in (req.body ?? {}) && { preco_tipo_id: preco_tipo_id ?? null }),
     },
   });
   return res.status(200).json({ message: 'Pavimento atualizado', data });
@@ -594,11 +750,13 @@ async function adicionarComodo(req: VercelRequest, res: VercelResponse, params: 
   const data = await prisma.comodos.create({
     data: {
       pavimento_id, apartamento_id,
-      tipo: b.tipo as never, nome: b.nome ?? null,
-      paredes: paredes as never,
-      tetos:   tetos   as never,
-      parede1_m2: totalPar, parede2_m2: 0, parede3_m2: 0, parede4_m2: 0,
-      teto_m2: tetos.reduce((s, t) => s + Number(t.m2), 0),
+      tipo:          b.tipo as never,
+      nome:          b.nome ?? null,
+      preco_tipo_id: b.preco_tipo_id ?? null,
+      paredes:       paredes as never,
+      tetos:         tetos   as never,
+      parede1_m2:    totalPar, parede2_m2: 0, parede3_m2: 0, parede4_m2: 0,
+      teto_m2:       tetos.reduce((s, t) => s + Number(t.m2), 0),
     },
   });
   return res.status(201).json({ message: 'Comodo adicionado', data });
@@ -609,9 +767,10 @@ async function atualizarComodo(req: VercelRequest, res: VercelResponse, params: 
   const comodo = await prisma.comodos.findUnique({ where: { id: params.id } });
   if (!comodo) return res.status(404).json({ error: 'Comodo nao encontrado' });
   const updateData: Record<string, unknown> = {};
-  if (b.tipo)       updateData.tipo       = b.tipo;
-  if ('nome' in b)  updateData.nome       = b.nome || null;
+  if (b.tipo)        updateData.tipo        = b.tipo;
+  if ('nome' in b)   updateData.nome        = b.nome || null;
   if (b.etapa_atual) updateData.etapa_atual = b.etapa_atual;
+  if ('preco_tipo_id' in b) updateData.preco_tipo_id = b.preco_tipo_id ?? null;
 
   if (Array.isArray(b.paredes)) {
     const paredes = b.paredes as ParedeItem[];
@@ -624,7 +783,6 @@ async function atualizarComodo(req: VercelRequest, res: VercelResponse, params: 
       updateData.teto_m2 = tetos.reduce((s, t) => s + Number(t.m2), 0);
     }
   } else {
-    // Legacy: individual fields
     if (b.parede1_m2 !== undefined) updateData.parede1_m2 = Number(b.parede1_m2);
     if (b.parede2_m2 !== undefined) updateData.parede2_m2 = Number(b.parede2_m2);
     if (b.parede3_m2 !== undefined) updateData.parede3_m2 = Number(b.parede3_m2);
@@ -669,6 +827,10 @@ export const routes: Route[] = [
   { method: 'POST',   path: '/obras/:id/apartamento-tipos',     handler: criarApartamentoTipo     },
   { method: 'PUT',    path: '/apartamento-tipos/:id',           handler: atualizarApartamentoTipo },
   { method: 'DELETE', path: '/apartamento-tipos/:id',           handler: excluirApartamentoTipo   },
+  { method: 'GET',    path: '/obras/:id/preco-tipos',           handler: listarPrecoTipos         },
+  { method: 'POST',   path: '/obras/:id/preco-tipos',           handler: criarPrecoTipo           },
+  { method: 'PUT',    path: '/preco-tipos/:id',                 handler: atualizarPrecoTipo       },
+  { method: 'DELETE', path: '/preco-tipos/:id',                 handler: excluirPrecoTipo         },
   { method: 'POST',   path: '/obras/:id/pavimentos',            handler: adicionarPavimento       },
   { method: 'GET',    path: '/pavimentos/:id',                  handler: getPavimento             },
   { method: 'PUT',    path: '/pavimentos/:id',                  handler: atualizarPavimento       },

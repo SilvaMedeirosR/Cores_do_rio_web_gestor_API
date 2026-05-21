@@ -23,17 +23,22 @@ const INPUT_SM = "border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zin
 interface OrcComodo { massa_parede:number; massa_teto:number; lixacao:number; pintura:number; acabamento:number; total:number; total_paredes:number; }
 interface ParedeData { m2:number; cor?:string|null; }
 interface TetoData   { m2:number; }
+interface PrecoTipo  { id:string; nome:string; precos:{ etapa:string; preco_m2:number }[]; }
 interface Comodo {
   id:string; tipo:string; nome:string|null;
   parede1_m2:number; parede2_m2:number; parede3_m2:number; parede4_m2:number; teto_m2:number;
   paredes:ParedeData[]; tetos:TetoData[];
   orcamento:OrcComodo;
+  preco_tipo_id:string|null;
+  preco_tipo_nome:string|null;
+  precos_efetivos:Record<string,number>;
+  preco_tipos_obra:PrecoTipo[];
   pavimentos: { id:string; nome:string; numero:number; obras: { id:string; nome:string; obra_precos:{etapa:string;preco_m2:number}[] } };
 }
 
 interface ParedeInput { m2:string; cor:string; }
 interface TetoInput   { m2:string; }
-interface EditForm { tipo:string; nome:string; paredes:ParedeInput[]; tetos:TetoInput[]; }
+interface EditForm { tipo:string; nome:string; paredes:ParedeInput[]; tetos:TetoInput[]; preco_tipo_id:string; }
 
 export default function ComodoDetailPage() {
   const { id, pavId, comId } = useParams<{ id: string; pavId: string; comId: string }>();
@@ -41,10 +46,11 @@ export default function ComodoDetailPage() {
   const [comodo,  setComodo]  = useState<Comodo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [editing, setEditing]         = useState(false);
-  const [editForm, setEditForm]       = useState<EditForm | null>(null);
-  const [saving, setSaving]           = useState(false);
-  const [erroEdit, setErroEdit]       = useState<string | null>(null);
+  const [editing, setEditing]       = useState(false);
+  const [editForm, setEditForm]     = useState<EditForm | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [erroEdit, setErroEdit]     = useState<string | null>(null);
+  const [showPTEdit, setShowPTEdit] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting]           = useState(false);
@@ -72,7 +78,8 @@ export default function ComodoDetailPage() {
     const tetos: TetoInput[] = comodo.tetos?.length > 0
       ? comodo.tetos.map(t => ({ m2: String(t.m2) }))
       : [{ m2: String(comodo.teto_m2) }];
-    setEditForm({ tipo: comodo.tipo, nome: comodo.nome ?? "", paredes, tetos });
+    setShowPTEdit(!!comodo.preco_tipo_id);
+    setEditForm({ tipo: comodo.tipo, nome: comodo.nome ?? "", paredes, tetos, preco_tipo_id: comodo.preco_tipo_id ?? "" });
     setEditing(true);
   };
 
@@ -86,6 +93,7 @@ export default function ComodoDetailPage() {
         nome: editForm.nome,
         paredes: editForm.paredes.map(p => ({ m2: n(p.m2), cor: p.cor || null })),
         tetos:   editForm.tetos.map(t => ({ m2: n(t.m2) })),
+        preco_tipo_id: editForm.preco_tipo_id || null,
       };
       const r = await fetch(`${API}/comodos/${comId}`, {
         method: "PUT",
@@ -111,7 +119,8 @@ export default function ComodoDetailPage() {
 
   const pav  = comodo.pavimentos;
   const obra = pav.obras;
-  const precoMap = Object.fromEntries(obra.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
+  const efetivos: Record<string,number> = comodo.precos_efetivos
+    ?? Object.fromEntries(obra.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
   const orc  = comodo.orcamento;
   const totalTetos = comodo.tetos?.length > 0 ? comodo.tetos.reduce((s,t) => s+Number(t.m2),0) : Number(comodo.teto_m2);
 
@@ -135,7 +144,14 @@ export default function ComodoDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           <p className="text-xs sm:text-sm text-zinc-400 mb-1">{obra.nome} / Pav. {pav.numero} — {pav.nome}</p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{comodo.nome || TIPO_LABELS[comodo.tipo]}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">{comodo.nome || TIPO_LABELS[comodo.tipo]}</h1>
+            {comodo.preco_tipo_nome && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                {comodo.preco_tipo_nome}
+              </span>
+            )}
+          </div>
           <p className="text-zinc-400 text-sm mt-1">{TIPO_LABELS[comodo.tipo]}</p>
         </div>
         <div className="flex flex-col sm:items-end gap-3 shrink-0">
@@ -233,8 +249,34 @@ export default function ComodoDetailPage() {
               </div>
             </div>
 
+            {/* Tipo de preço */}
+            <div>
+              {!showPTEdit ? (
+                <button type="button" onClick={() => setShowPTEdit(true)}
+                  className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+                  <span>Personalizar preço</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-medium text-zinc-500 shrink-0">Tipo de preço</span>
+                  <select value={editForm.preco_tipo_id}
+                    onChange={e => setEditForm(p => p ? { ...p, preco_tipo_id: e.target.value } : p)}
+                    className="flex-1 min-w-40 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    <option value="">— Padrão geral da obra —</option>
+                    {(comodo.preco_tipos_obra ?? []).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  </select>
+                  <button type="button"
+                    onClick={() => { setShowPTEdit(false); setEditForm(p => p ? { ...p, preco_tipo_id: "" } : p); }}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 leading-none">✕</button>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => { setEditing(false); setErroEdit(null); }}
+              <button type="button" onClick={() => { setEditing(false); setErroEdit(null); setShowPTEdit(false); }}
                 className="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-800 border border-zinc-200 rounded-lg transition-colors">
                 Cancelar
               </button>
@@ -247,7 +289,7 @@ export default function ComodoDetailPage() {
         </form>
       )}
 
-      {/* Cards: Medicoes + Precos */}
+      {/* Cards: Medições + Preços */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
         <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
           <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Medições</h2>
@@ -295,19 +337,26 @@ export default function ComodoDetailPage() {
         </div>
 
         <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
-          <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Preços de Referência (m²)</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider">Preços de Referência (m²)</h2>
+            {comodo.preco_tipo_nome && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                {comodo.preco_tipo_nome}
+              </span>
+            )}
+          </div>
           <div className="space-y-3">
             {ETAPAS.map(e => (
               <div key={e} className="flex items-center justify-between">
                 <span className="text-sm text-zinc-500">{ETAPA_LABELS[e]}</span>
-                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{fmt(precoMap[e] ?? 0)}</span>
+                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{fmt(efetivos[e] ?? 0)}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Orcamento detalhado */}
+      {/* Orçamento detalhado */}
       <div className="bg-white border border-zinc-200 rounded-xl p-4 sm:p-6 shadow-sm">
         <h2 className="text-xs sm:text-sm font-semibold text-zinc-700 uppercase tracking-wider mb-4">Detalhamento do Orçamento</h2>
         <div className="overflow-x-auto">
@@ -318,20 +367,20 @@ export default function ComodoDetailPage() {
             <div className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
               <span className="text-zinc-600">Massa Parede</span>
               <span className="text-right text-zinc-500 tabular-nums">{fmtN(orc.total_paredes)} m²</span>
-              <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap.massa_parede ?? 0)}</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmt(efetivos.massa_parede ?? 0)}</span>
               <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc.massa_parede)}</span>
             </div>
             <div className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
               <span className="text-zinc-600">Massa Teto</span>
               <span className="text-right text-zinc-500 tabular-nums">{fmtN(totalTetos)} m²</span>
-              <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap.massa_teto ?? 0)}</span>
+              <span className="text-right text-zinc-500 tabular-nums">{fmt(efetivos.massa_teto ?? 0)}</span>
               <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc.massa_teto)}</span>
             </div>
             {(["lixacao","pintura","acabamento"] as const).map(e => (
               <div key={e} className="grid grid-cols-4 py-3 text-sm border-b border-zinc-100">
                 <span className="text-zinc-600">{ETAPA_LABELS[e]}</span>
                 <span className="text-right text-zinc-500 tabular-nums">{fmtN(orc.total_paredes + totalTetos)} m²</span>
-                <span className="text-right text-zinc-500 tabular-nums">{fmt(precoMap[e] ?? 0)}</span>
+                <span className="text-right text-zinc-500 tabular-nums">{fmt(efetivos[e] ?? 0)}</span>
                 <span className="text-right font-semibold text-zinc-800 tabular-nums">{fmt(orc[e as Etapa])}</span>
               </div>
             ))}

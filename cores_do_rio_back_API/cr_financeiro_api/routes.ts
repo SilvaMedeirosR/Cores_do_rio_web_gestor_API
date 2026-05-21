@@ -11,30 +11,41 @@ export interface Route {
 
 const ETAPAS = ['massa_parede', 'massa_teto', 'lixacao', 'pintura', 'acabamento'] as const;
 type Etapa = typeof ETAPAS[number];
+type PrecoMap = Record<string, number>;
+type ParedeItem = { m2: number };
+type TetoItem   = { m2: number };
 
-// Campos mínimos para calcular orçamento
-interface ComodoCalculo {
-  id: string;
-  parede1_m2: unknown;
-  parede2_m2: unknown;
-  parede3_m2: unknown;
-  parede4_m2: unknown;
-  teto_m2: unknown;
+// ── helpers de cascata de preços ──────────────────────────────────────────────
+
+function buildPrecoMap(precos: { etapa: string; preco_m2: unknown }[]): PrecoMap {
+  return Object.fromEntries(precos.map(p => [p.etapa, Number(p.preco_m2)]));
 }
 
-// Campos completos usados no detalhe da obra
-interface ComodoMedidas extends ComodoCalculo {
-  tipo: string;
-  nome: string | null;
-  etapa_atual: string | null;
+function buildPrecoTiposMap(tipos: { id: string; preco_tipo_precos: { etapa: string; preco_m2: unknown }[] }[]): Record<string, PrecoMap> {
+  return Object.fromEntries(tipos.map(t => [t.id, buildPrecoMap(t.preco_tipo_precos)]));
 }
 
-function calcOrcamentoComodo(c: ComodoCalculo, precoMap: Record<string, number>): Record<Etapa, number> & { total: number } {
-  const totalParedes =
-    Number(c.parede1_m2) + Number(c.parede2_m2) +
-    Number(c.parede3_m2) + Number(c.parede4_m2);
-  const teto      = Number(c.teto_m2);
-  const totalArea = totalParedes + teto;
+function resolvePrecos(tipoId: string | null | undefined, precoTiposMap: Record<string, PrecoMap>, base: PrecoMap): PrecoMap {
+  if (tipoId && precoTiposMap[tipoId]) return { ...base, ...precoTiposMap[tipoId] };
+  return base;
+}
+
+function somarParedes(c: Record<string, unknown>): number {
+  const arr = Array.isArray(c.paredes) ? c.paredes as ParedeItem[] : [];
+  if (arr.length > 0) return arr.reduce((s, p) => s + Number(p.m2), 0);
+  return Number(c.parede1_m2 ?? 0) + Number(c.parede2_m2 ?? 0) + Number(c.parede3_m2 ?? 0) + Number(c.parede4_m2 ?? 0);
+}
+
+function somarTetos(c: Record<string, unknown>): number {
+  const arr = Array.isArray(c.tetos) ? c.tetos as TetoItem[] : [];
+  if (arr.length > 0) return arr.reduce((s, t) => s + Number(t.m2), 0);
+  return Number(c.teto_m2 ?? 0);
+}
+
+function calcOrcamentoComodo(c: Record<string, unknown>, precoMap: PrecoMap): Record<Etapa, number> & { total: number } {
+  const totalParedes = somarParedes(c);
+  const teto         = somarTetos(c);
+  const totalArea    = totalParedes + teto;
   const etapas = {
     massa_parede: totalParedes * (precoMap.massa_parede ?? 0),
     massa_teto:   teto         * (precoMap.massa_teto   ?? 0),
@@ -85,9 +96,11 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
     .select(`
       id, nome, local, created_at,
       obra_precos(etapa, preco_m2),
+      preco_tipos(id, preco_tipo_precos(etapa, preco_m2)),
       pavimentos(
-        id,
-        comodos(id, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2)
+        id, preco_tipo_id,
+        apartamentos(id, preco_tipo_id),
+        comodos(id, preco_tipo_id, apartamento_id, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2, paredes, tetos)
       )
     `)
     .order('created_at', { ascending: false });
@@ -95,15 +108,18 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
   if (error) return res.status(500).json({ error: error.message });
   if (!obras || obras.length === 0) return res.status(200).json({ data: [] });
 
-  type PavRow = { id: string; comodos: ComodoCalculo[] };
+  type AptRow = { id: string; preco_tipo_id: string | null; };
+  type ComodoRow = { id: string; preco_tipo_id: string | null; apartamento_id: string | null; [k: string]: unknown; };
+  type PavRow = { id: string; preco_tipo_id: string | null; apartamentos: AptRow[]; comodos: ComodoRow[]; };
+  type PrecoTipoRow = { id: string; preco_tipo_precos: { etapa: string; preco_m2: unknown }[]; };
   type ObraRow = {
     id: string; nome: string; local: string;
-    obra_precos: Array<{ etapa: string; preco_m2: unknown }>;
+    obra_precos: { etapa: string; preco_m2: unknown }[];
+    preco_tipos: PrecoTipoRow[];
     pavimentos: PavRow[];
   };
 
   const rows = obras as unknown as ObraRow[];
-
   const allComodoIds = rows.flatMap(o => o.pavimentos.flatMap(p => p.comodos.map(c => c.id)));
 
   const { data: progresso } = allComodoIds.length > 0
@@ -111,30 +127,37 @@ async function listarObras(_req: VercelRequest, res: VercelResponse) {
     : { data: [] };
 
   const pagoMap: Record<string, number> = {};
-  for (const p of (progresso ?? []) as Array<{ comodo_id: string; valor_pago: unknown }>) {
+  for (const p of (progresso ?? []) as { comodo_id: string; valor_pago: unknown }[]) {
     pagoMap[p.comodo_id] = (pagoMap[p.comodo_id] ?? 0) + Number(p.valor_pago);
   }
 
   const result = rows.map(o => {
-    const precoMap = Object.fromEntries(o.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
+    const obraPrecos    = buildPrecoMap(o.obra_precos);
+    const precoTiposMap = buildPrecoTiposMap(o.preco_tipos);
     let orcamento_total = 0;
     let valor_pago = 0;
     let num_comodos = 0;
+
     for (const pav of o.pavimentos) {
+      const pavPrecos = resolvePrecos(pav.preco_tipo_id, precoTiposMap, obraPrecos);
+      const aptPrecoMap: Record<string, string | null> = {};
+      for (const apt of pav.apartamentos) aptPrecoMap[apt.id] = apt.preco_tipo_id;
+
       for (const c of pav.comodos) {
-        orcamento_total += calcOrcamentoComodo(c, precoMap).total;
+        const aptPrecos = c.apartamento_id
+          ? resolvePrecos(aptPrecoMap[c.apartamento_id] ?? null, precoTiposMap, pavPrecos)
+          : pavPrecos;
+        const efetivos = resolvePrecos(c.preco_tipo_id, precoTiposMap, aptPrecos);
+        orcamento_total += calcOrcamentoComodo(c, efetivos).total;
         valor_pago      += pagoMap[c.id] ?? 0;
         num_comodos++;
       }
     }
+
     return {
-      id: o.id,
-      nome: o.nome,
-      local: o.local,
-      orcamento_total,
-      valor_pago,
-      num_pavimentos: o.pavimentos.length,
-      num_comodos,
+      id: o.id, nome: o.nome, local: o.local,
+      orcamento_total, valor_pago,
+      num_pavimentos: o.pavimentos.length, num_comodos,
     };
   });
 
@@ -150,9 +173,11 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
     .select(`
       id, nome, local,
       obra_precos(etapa, preco_m2),
+      preco_tipos(id, preco_tipo_precos(etapa, preco_m2)),
       pavimentos(
-        id, nome, numero,
-        comodos(id, tipo, nome, etapa_atual, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2)
+        id, nome, numero, preco_tipo_id,
+        apartamentos(id, preco_tipo_id),
+        comodos(id, tipo, nome, etapa_atual, preco_tipo_id, apartamento_id, parede1_m2, parede2_m2, parede3_m2, parede4_m2, teto_m2, paredes, tetos)
       )
     `)
     .eq('id', obraId)
@@ -160,16 +185,21 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
 
   if (error) return res.status(404).json({ error: 'Obra nao encontrada' });
 
-  type PavDetail = { id: string; nome: string; numero: number; comodos: ComodoMedidas[] };
-  type ObraDetail = {
+  type AptDetail   = { id: string; preco_tipo_id: string | null; };
+  type ComodoDetail = { id: string; tipo: string; nome: string | null; etapa_atual: string | null; preco_tipo_id: string | null; apartamento_id: string | null; [k: string]: unknown; };
+  type PavDetail   = { id: string; nome: string; numero: number; preco_tipo_id: string | null; apartamentos: AptDetail[]; comodos: ComodoDetail[]; };
+  type PrecoTipoRow = { id: string; preco_tipo_precos: { etapa: string; preco_m2: unknown }[]; };
+  type ObraDetail  = {
     id: string; nome: string; local: string;
-    obra_precos: Array<{ etapa: string; preco_m2: unknown }>;
+    obra_precos: { etapa: string; preco_m2: unknown }[];
+    preco_tipos: PrecoTipoRow[];
     pavimentos: PavDetail[];
   };
 
   const o = obra as unknown as ObraDetail;
-  const precoMap = Object.fromEntries(o.obra_precos.map(p => [p.etapa, Number(p.preco_m2)]));
-  const allComodoIds = o.pavimentos.flatMap(p => p.comodos.map(c => c.id));
+  const obraPrecos    = buildPrecoMap(o.obra_precos);
+  const precoTiposMap = buildPrecoTiposMap(o.preco_tipos);
+  const allComodoIds  = o.pavimentos.flatMap(p => p.comodos.map(c => c.id));
 
   // Auto-create missing etapa_progresso records
   const { data: existingProg } = await supabase
@@ -178,7 +208,7 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
   const existingSet = new Set(
     (existingProg ?? []).map((r: { comodo_id: string; etapa: string }) => `${r.comodo_id}:${r.etapa}`)
   );
-  const toInsert: Array<{ comodo_id: string; etapa: string; valor_pago: number; concluida: boolean }> = [];
+  const toInsert: { comodo_id: string; etapa: string; valor_pago: number; concluida: boolean }[] = [];
   for (const comodoId of allComodoIds) {
     for (const etapa of ETAPAS) {
       if (!existingSet.has(`${comodoId}:${etapa}`)) {
@@ -204,14 +234,23 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
   const pavimentos = o.pavimentos
     .sort((a, b) => a.numero - b.numero)
     .map(pav => {
+      const pavPrecos = resolvePrecos(pav.preco_tipo_id, precoTiposMap, obraPrecos);
+      const aptPrecoMap: Record<string, string | null> = {};
+      for (const apt of pav.apartamentos) aptPrecoMap[apt.id] = apt.preco_tipo_id;
+
       let pav_orcamento = 0;
       let pav_pago = 0;
 
       const comodos = pav.comodos.map(c => {
-        const orcEtapas = calcOrcamentoComodo(c, precoMap);
+        const aptPrecos = c.apartamento_id
+          ? resolvePrecos(aptPrecoMap[c.apartamento_id] ?? null, precoTiposMap, pavPrecos)
+          : pavPrecos;
+        const efetivos  = resolvePrecos(c.preco_tipo_id, precoTiposMap, aptPrecos);
+        const orcEtapas = calcOrcamentoComodo(c, efetivos);
+
         const etapas = ETAPAS.map(e => {
-          const orcEtapa = orcEtapas[e];
-          const prog     = progMap[c.id]?.[e];
+          const orcEtapa   = orcEtapas[e];
+          const prog       = progMap[c.id]?.[e];
           const valor_pago = prog ? Number(prog.valor_pago) : 0;
           const concluida  = prog?.concluida || valor_pago >= orcEtapa;
           return { etapa: e, orcamento: orcEtapa, valor_pago, concluida };
@@ -220,13 +259,9 @@ async function getObraDetalhe(_req: VercelRequest, res: VercelResponse, params?:
         pav_orcamento += orcEtapas.total;
         pav_pago      += comodo_pago;
         return {
-          id: c.id,
-          tipo: c.tipo,
-          nome: c.nome,
+          id: c.id, tipo: c.tipo, nome: c.nome,
           etapa_atual: c.etapa_atual ?? 'massa_parede',
-          orcamento_total: orcEtapas.total,
-          valor_pago: comodo_pago,
-          etapas,
+          orcamento_total: orcEtapas.total, valor_pago: comodo_pago, etapas,
         };
       });
 

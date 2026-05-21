@@ -68,6 +68,21 @@ const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", c
 const INPUT    = "w-full border border-zinc-200 rounded-lg px-3 py-2.5 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
 const INPUT_SM = "border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-900 bg-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-shadow";
 
+function resolvePrecoMapForm(
+  tipoNome: string,
+  preco_tipos: PrecoTipoForm[],
+  base: Record<string, number>
+): Record<string, number> {
+  if (!tipoNome) return base;
+  const tipo = preco_tipos.find(t => t.nome.trim() === tipoNome);
+  if (!tipo) return base;
+  const override = Object.fromEntries(
+    ETAPAS.filter(e => tipo.precos[e.value] !== "" && tipo.precos[e.value] != null)
+      .map(e => [e.value, n(tipo.precos[e.value])])
+  );
+  return { ...base, ...override };
+}
+
 function calcOrcComodo(c: ComodoForm, precoMap: Record<string, number>) {
   const totalParedes = c.paredes.reduce((s, p) => s + n(p.m2), 0);
   const teto         = c.tetos.reduce((s, t) => s + n(t.m2), 0);
@@ -299,7 +314,10 @@ export default function ObrasPage() {
     const a = [...p.pavimentos]; const apts = [...a[pi].apartamentos]; const cs = [...apts[ai].comodos]; cs[ci] = fn(cs[ci]); apts[ai] = { ...apts[ai], comodos: cs }; a[pi] = { ...a[pi], apartamentos: apts }; return { ...p, pavimentos: a };
   });
 
-  const calcComodoTotal = (c: ComodoForm) => calcOrcComodo(c, precoMap).total;
+  const calcComodoTotal = (c: ComodoForm, aptTipoNome = "") => {
+    const aptPrecoMap = resolvePrecoMapForm(aptTipoNome, form.preco_tipos, precoMap);
+    return calcOrcComodo(c, resolvePrecoMapForm(c.preco_tipo_nome, form.preco_tipos, aptPrecoMap)).total;
+  };
 
   // Quando o tipo muda, copia cômodos do primeiro apartamento com esse tipo (se existir)
   const handleAptTipoChange = (pi: number, ai: number, tipo_nome: string) => {
@@ -338,7 +356,8 @@ export default function ObrasPage() {
 
   const obraTotal = form.pavimentos.reduce((s, pav) => {
     const avulsos = pav.comodos.reduce((ps, c) => ps + calcComodoTotal(c), 0);
-    const apts    = pav.apartamentos.reduce((as, apt) => as + apt.comodos.reduce((cs, c) => cs + calcComodoTotal(c), 0), 0);
+    const apts    = pav.apartamentos.reduce((as, apt) =>
+      as + apt.comodos.reduce((cs, c) => cs + calcComodoTotal(c, apt.preco_tipo_nome), 0), 0);
     return s + avulsos + apts;
   }, 0);
 
@@ -596,8 +615,8 @@ export default function ObrasPage() {
 
             <div className="space-y-5">
               {form.pavimentos.map((pav, pi) => {
-                const aptTotal  = pav.apartamentos.reduce((s, apt) => s + apt.comodos.reduce((cs, c) => cs + calcOrcComodo(c, precoMap).total, 0), 0);
-                const avulTotal = pav.comodos.reduce((s, c) => s + calcOrcComodo(c, precoMap).total, 0);
+                const aptTotal  = pav.apartamentos.reduce((s, apt) => s + apt.comodos.reduce((cs, c) => cs + calcComodoTotal(c, apt.preco_tipo_nome), 0), 0);
+                const avulTotal = pav.comodos.reduce((s, c) => s + calcComodoTotal(c), 0);
                 const pavTotal  = aptTotal + avulTotal;
                 return (
                   <div key={pi} className="border border-zinc-200 rounded-xl overflow-hidden">
@@ -649,7 +668,7 @@ export default function ObrasPage() {
                         ) : (
                           <div className="space-y-3">
                             {pav.apartamentos.map((apt, ai) => {
-                              const aptComodoTotal = apt.comodos.reduce((s, c) => s + calcOrcComodo(c, precoMap).total, 0);
+                              const aptComodoTotal = apt.comodos.reduce((s, c) => s + calcComodoTotal(c, apt.preco_tipo_nome), 0);
                               return (
                                 <div key={ai} className="border border-blue-100 rounded-lg overflow-hidden">
                                   {/* Cabeçalho do apartamento */}
@@ -705,7 +724,7 @@ export default function ObrasPage() {
                                   {/* Cômodos do apartamento */}
                                   {!aptCollapsed[`${pi}-${ai}`] && <div className="p-3 space-y-2">
                                     {apt.comodos.map((c, ci) => {
-                                      const orc = calcOrcComodo(c, precoMap);
+                                      const orc = calcOrcComodo(c, resolvePrecoMapForm(c.preco_tipo_nome, form.preco_tipos, resolvePrecoMapForm(apt.preco_tipo_nome, form.preco_tipos, precoMap)));
                                       return (
                                         <div key={ci} className="border border-zinc-100 rounded-lg p-2.5 space-y-2 bg-white">
                                           <div className="flex items-center gap-2 flex-wrap">
@@ -821,7 +840,7 @@ export default function ObrasPage() {
                         ) : (
                           <div className="space-y-2">
                             {pav.comodos.map((c, ci) => {
-                              const orc = calcOrcComodo(c, precoMap);
+                              const orc = calcOrcComodo(c, resolvePrecoMapForm(c.preco_tipo_nome, form.preco_tipos, precoMap));
                               return (
                                 <div key={ci} className="border border-zinc-100 rounded-lg p-2.5 space-y-2 bg-zinc-50/50">
                                   <div className="flex items-center gap-2 flex-wrap">

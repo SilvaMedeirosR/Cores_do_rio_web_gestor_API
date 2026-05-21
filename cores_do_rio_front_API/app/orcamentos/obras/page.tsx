@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Plus, Search, ChevronDown, X as XIcon, Trash2 } from "lucide-react";
+import { Search, ChevronDown, Trash2 } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { usePagination } from "@/lib/hooks/usePagination";
 import Pagination from "@/components/Pagination";
@@ -399,37 +399,13 @@ export default function ObrasPage() {
         })),
       };
 
-      if (obraParaOrcar) {
-        const r = await fetch(`${API}/obras/${obraParaOrcar.id}/orcamento`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parcialPayload),
-        });
-        if (!r.ok) { const j = await r.json(); toastError(j.error ?? "Erro ao salvar"); setErro(j.error ?? "Erro ao salvar"); return; }
-        toastSuccess("Orçamento registrado com sucesso!");
-        setForm(emptyForm()); setShowForm(false); setObraParaOrcar(null); await fetchObras();
-        return;
-      }
-
-      let empreiteiraId = form.empreiteira_id || null;
-      if (form.nova_empreiteira.trim()) {
-        const re = await fetch(`${API}/empreiteiras`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nome: form.nova_empreiteira.trim() }),
-        });
-        const je = await re.json();
-        if (!re.ok) { setErro(je.error ?? "Erro ao criar empreiteira"); setSub(false); return; }
-        empreiteiraId = je.data.id;
-        setEmpreiteiras(prev => {
-          const existe = prev.find(x => x.id === je.data.id);
-          return existe ? prev : [...prev, je.data].sort((a, b) => a.nome.localeCompare(b.nome));
-        });
-      }
-
-      const payload = { nome: form.nome, local: form.local || null, empreiteira_id: empreiteiraId, ...parcialPayload };
-      const r = await fetch(`${API}/obras`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!obraParaOrcar) return;
+      const r = await fetch(`${API}/obras/${obraParaOrcar.id}/orcamento`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parcialPayload),
+      });
       if (!r.ok) { const j = await r.json(); toastError(j.error ?? "Erro ao salvar"); setErro(j.error ?? "Erro ao salvar"); return; }
-      toastSuccess("Obra criada com sucesso!");
-      setForm(emptyForm()); setShowForm(false); await fetchObras();
+      toastSuccess("Orçamento registrado com sucesso!");
+      setForm(emptyForm()); setShowForm(false); setObraParaOrcar(null); await fetchObras();
     } catch { toastError("Erro de conexão com a API"); setErro("Erro de conexão com a API"); } finally { setSub(false); }
   };
 
@@ -461,81 +437,41 @@ export default function ObrasPage() {
       </div>
 
       {/* Page header */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "clamp(1.5rem,3vw,2rem)" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1, marginBottom: "6px" }}>
-            Obras
-          </h1>
-          <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>
-            {loading ? "Carregando..." : `${obras.length} obra${obras.length !== 1 ? "s" : ""}${obrasNegociacao.length > 0 ? ` · ${obrasNegociacao.length} em negociação` : ""} · ${empreiteiras.length} empreiteira${empreiteiras.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <button
-          onClick={() => { if (showForm && obraParaOrcar) { setShowForm(false); setObraParaOrcar(null); setErro(null); setForm(emptyForm()); } else { setShowForm(!showForm); setObraParaOrcar(null); setErro(null); if (showForm) setForm(emptyForm()); } }}
-          className="cr-btn-primary"
-          style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", backgroundColor: (showForm && !obraParaOrcar) ? "rgba(26,42,58,0.7)" : "#1A2A3A", color: "#F3ECE0", cursor: "pointer", fontSize: "0.8rem", fontWeight: 500, transition: "background-color 0.15s" }}
-        >
-          {(showForm && !obraParaOrcar) ? <><XIcon size={13} strokeWidth={2.5} /> Cancelar</> : <><Plus size={13} strokeWidth={2.5} /> Nova Obra</>}
-        </button>
+      <div style={{ marginBottom: "clamp(1.5rem,3vw,2rem)" }}>
+        <h1 style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(1.75rem,4vw,2.5rem)", fontWeight: 400, color: "#1A2A3A", letterSpacing: "-0.01em", lineHeight: 1.1, marginBottom: "6px" }}>
+          Obras
+        </h1>
+        <p style={{ fontSize: "0.8rem", color: "rgba(26,42,58,0.45)" }}>
+          {loading ? "Carregando..." : `${obras.length} obra${obras.length !== 1 ? "s" : ""}${obrasNegociacao.length > 0 ? ` · ${obrasNegociacao.length} em negociação` : ""}`}
+        </p>
       </div>
 
-      {/* Form */}
-      {showForm && (
+      {/* Form de orçamento (abre ao clicar em card em negociação) */}
+      {showForm && obraParaOrcar && (
         <form onSubmit={handleSubmit} className="bg-white border border-zinc-200 rounded-xl shadow-sm mb-8 overflow-hidden">
 
-          {/* Dados */}
+          {/* Dados da obra (somente leitura) */}
           <div className="px-4 sm:px-6 py-5 border-b border-zinc-100">
-            {obraParaOrcar ? (
-              <>
-                <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-3">Orçamento de Mão de Obra</h2>
-                {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-wrap items-start gap-x-6 gap-y-1">
-                  <div>
-                    <span className="text-xs text-amber-600 font-medium">Obra</span>
-                    <p className="text-sm font-semibold text-zinc-900">{obraParaOrcar.nome}</p>
-                  </div>
-                  {obraParaOrcar.local && (
-                    <div>
-                      <span className="text-xs text-amber-600 font-medium">Local</span>
-                      <p className="text-sm text-zinc-700">{obraParaOrcar.local}</p>
-                    </div>
-                  )}
-                  {(obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira) && (
-                    <div>
-                      <span className="text-xs text-amber-600 font-medium">Construtora</span>
-                      <p className="text-sm text-zinc-700">{obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira}</p>
-                    </div>
-                  )}
+            <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-3">Orçamento de Mão de Obra</h2>
+            {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-wrap items-start gap-x-6 gap-y-1">
+              <div>
+                <span className="text-xs text-amber-600 font-medium">Obra</span>
+                <p className="text-sm font-semibold text-zinc-900">{obraParaOrcar.nome}</p>
+              </div>
+              {obraParaOrcar.local && (
+                <div>
+                  <span className="text-xs text-amber-600 font-medium">Local</span>
+                  <p className="text-sm text-zinc-700">{obraParaOrcar.local}</p>
                 </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider mb-4">Dados da Obra</h2>
-                {erro && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{erro}</div>}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Nome *</label>
-                    <input required value={form.nome} onChange={e => setObra("nome", e.target.value)}
-                      className={INPUT} placeholder="Ex: Edificio Central" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Local</label>
-                    <input value={form.local} onChange={e => setObra("local", e.target.value)}
-                      className={INPUT} placeholder="Ex: Rua das Flores, 123" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Empreiteira</label>
-                    <EmpreiteiraSelect
-                      empreiteiras={empreiteiras}
-                      value={form.empreiteira_id}
-                      novaValue={form.nova_empreiteira}
-                      onChange={id => setForm(p => ({ ...p, empreiteira_id: id }))}
-                      onNovaChange={v => setForm(p => ({ ...p, nova_empreiteira: v }))}
-                    />
-                  </div>
+              )}
+              {(obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira) && (
+                <div>
+                  <span className="text-xs text-amber-600 font-medium">Construtora</span>
+                  <p className="text-sm text-zinc-700">{obraParaOrcar.empreiteiras?.nome ?? obraParaOrcar.empreiteira}</p>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Precos */}
@@ -994,7 +930,7 @@ export default function ObrasPage() {
               </button>
               <button type="submit" disabled={submitting}
                 className="bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
-                {submitting ? "Salvando..." : obraParaOrcar ? "Enviar Orçamento" : "Registrar Obra"}
+                {submitting ? "Salvando..." : "Enviar Orçamento"}
               </button>
             </div>
           </div>
